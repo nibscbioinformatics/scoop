@@ -1,11 +1,11 @@
 #!/usr/bin/env nextflow
 /*
 ========================================================================================
-                         nf-core/scoop
+                         nibsbioinformatics/scoop
 ========================================================================================
- nf-core/scoop Analysis Pipeline.
+ nibsbioinformatics/scoop Analysis Pipeline.
  #### Homepage / Documentation
- https://github.com/nf-core/scoop
+ https://github.com/nibsbioinformatics/scoop
 ----------------------------------------------------------------------------------------
 */
 
@@ -18,7 +18,7 @@ def helpMessage() {
 
     The typical command for running the pipeline is as follows:
 
-    nextflow run nf-core/scoop --reads '*_R{1,2}.fastq.gz' -profile docker
+    nextflow run nibsbioinformatics/scoop --reads '*_R{1,2}.fastq.gz' -profile docker
 
     Mandatory arguments:
       --reads [file]                Path to input data (must be surrounded with quotes)
@@ -56,21 +56,10 @@ if (params.help) {
  * SET UP CONFIGURATION VARIABLES
  */
 
-// Check if genome exists in the config file
-if (params.genomes && params.genome && !params.genomes.containsKey(params.genome)) {
-    exit 1, "The provided genome '${params.genome}' is not available in the iGenomes file. Currently the available genomes are ${params.genomes.keySet().join(", ")}"
-}
-
 // TODO nf-core: Add any reference files that are needed
 // Configurable reference genomes
 //
-// NOTE - THIS IS NOT USED IN THIS PIPELINE, EXAMPLE ONLY
-// If you want to use the channel below in a process, define the following:
-//   input:
-//   file fasta from ch_fasta
-//
-params.fasta = params.genome ? params.genomes[ params.genome ].fasta ?: false : false
-if (params.fasta) { ch_fasta = file(params.fasta, checkIfExists: true) }
+
 
 // Has the run name been specified by the user?
 //  this has the bonus effect of catching both -name and --name
@@ -94,29 +83,24 @@ ch_multiqc_config = file("$baseDir/assets/multiqc_config.yaml", checkIfExists: t
 ch_multiqc_custom_config = params.multiqc_config ? Channel.fromPath(params.multiqc_config, checkIfExists: true) : Channel.empty()
 ch_output_docs = file("$baseDir/docs/output.md", checkIfExists: true)
 
-/*
+/* ############################################
  * Create a channel for input read files
+ * ############################################
  */
-if (params.readPaths) {
-    if (params.single_end) {
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [ file(row[1][0], checkIfExists: true) ] ] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { ch_read_files_fastqc; ch_read_files_trimming }
-    } else {
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [ file(row[1][0], checkIfExists: true), file(row[1][1], checkIfExists: true) ] ] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { ch_read_files_fastqc; ch_read_files_trimming }
-    }
-} else {
-    Channel
-        .fromFilePairs(params.reads, size: params.single_end ? 1 : 2)
-        .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}\nNB: Path needs to be enclosed in quotes!\nIf this is single-end data, please specify --single_end on the command line." }
-        .into { ch_read_files_fastqc; ch_read_files_trimming }
+
+
+inputSample = Channel.empty()
+if (params.input) {
+  tsvFile = file(params.input)
+  inputSample = readInputFile(tsvFile)
 }
+else {
+  log.info "No TSV file"
+  exit 1, 'No sample were defined, see --help'
+}
+
+
+
 
 // Header log info
 log.info nfcoreHeader()
@@ -160,8 +144,8 @@ Channel.from(summary.collect{ [it.key, it.value] })
     .map { x -> """
     id: 'nf-core-scoop-summary'
     description: " - this information is collected when the pipeline is started."
-    section_name: 'nf-core/scoop Workflow Summary'
-    section_href: 'https://github.com/nf-core/scoop'
+    section_name: 'nibsbioinformatics/scoop Workflow Summary'
+    section_href: 'https://github.com/nibsbioinformatics/scoop'
     plot_type: 'html'
     data: |
         <dl class=\"dl-horizontal\">
@@ -247,6 +231,124 @@ process multiqc {
     """
 }
 
+
+/*
+* ################################################
+* ## HUMANN2 PROCESSES ###########################
+* ################################################
+*/
+
+
+process characteriseReads {
+
+  tag "humann2 $sampleId"
+  cpus 8
+  queue 'WORK'
+  time '360h'
+  memory '32 GB'
+  containerOptions = "-B ${params.reads} -B ${params.output_dir}"
+
+  publishDir "${params.output_dir}", mode: 'copy'
+
+  input:
+  set sampleId, file(reads) from samples_ch
+
+  output:
+  file("${sampleId}/*genefamilies.tsv") into gene_families_ch
+  file("${sampleId}/*pathabundance.tsv") into path_abundance_ch
+  file("${sampleId}/*pathcoverage.tsv")
+  file("${sampleId}/${sampleId}_concat_humann2_temp/${sampleId}_concat_metaphlan_bowtie2.txt")
+  file("${sampleId}/${sampleId}_concat_humann2_temp/${sampleId}_concat_metaphlan_bugs_list.tsv")
+
+  script:
+
+  """
+  cat $reads >${sampleId}_concat.fastq.gz
+
+  humann2 \
+  --input ${sampleId}_concat.fastq.gz \
+  --output ${sampleId} \
+  --threads ${task.cpus}
+  """
+}
+
+
+process joinGenes {
+
+  tag "humann2 join genes"
+  cpus 1
+  queue 'WORK'
+  time '12h'
+  memory '6 GB'
+  containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
+
+  publishDir "${params.output_dir}", mode: 'copy'
+
+  input:
+  file genetables from gene_families_ch.collect()
+
+  output:
+  file("joined_genefamilies.tsv")
+  file("joined_genefamilies_renorm_cpm.tsv")
+
+  script:
+  """
+  humann2_join_tables \
+  -i ./ \
+  -o joined_genefamilies.tsv \
+  --file_name genefamilies
+
+  humann2_renorm_table \
+  -i joined_genefamilies.tsv \
+  -o joined_genefamilies_renorm_cpm.tsv \
+  --units cpm
+
+  """
+
+}
+
+
+process joinPathways {
+
+  tag "humann2 join pathways"
+  cpus 1
+  queue 'WORK'
+  time '12h'
+  memory '6 GB'
+  containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
+
+  publishDir "${params.output_dir}", mode: 'copy'
+
+  input:
+  file pathtables from path_abundance_ch.collect()
+
+  output:
+  file("joined_pathabundance.tsv")
+  file("joined_pathabundance_renorm_cpm.tsv")
+
+  script:
+  """
+  humann2_join_tables \
+  -i ./ \
+  -o joined_pathabundance.tsv \
+  --file_name pathabundance
+
+  humann2_renorm_table \
+  -i joined_pathabundance.tsv \
+  -o joined_pathabundance_renorm_cpm.tsv \
+  --units cpm
+
+  """
+
+}
+
+
+
+
+
+
+
+
 /*
  * STEP 3 - Output Description HTML
  */
@@ -271,9 +373,9 @@ process output_documentation {
 workflow.onComplete {
 
     // Set up the e-mail variables
-    def subject = "[nf-core/scoop] Successful: $workflow.runName"
+    def subject = "[nibsbioinformatics/scoop] Successful: $workflow.runName"
     if (!workflow.success) {
-        subject = "[nf-core/scoop] FAILED: $workflow.runName"
+        subject = "[nibsbioinformatics/scoop] FAILED: $workflow.runName"
     }
     def email_fields = [:]
     email_fields['version'] = workflow.manifest.version
@@ -298,19 +400,18 @@ workflow.onComplete {
     email_fields['summary']['Nextflow Build'] = workflow.nextflow.build
     email_fields['summary']['Nextflow Compile Timestamp'] = workflow.nextflow.timestamp
 
-    // TODO nf-core: If not using MultiQC, strip out this code (including params.max_multiqc_email_size)
     // On success try attach the multiqc report
     def mqc_report = null
     try {
         if (workflow.success) {
             mqc_report = ch_multiqc_report.getVal()
             if (mqc_report.getClass() == ArrayList) {
-                log.warn "[nf-core/scoop] Found multiple reports from process 'multiqc', will use only one"
+                log.warn "[nibsbioinformatics/scoop] Found multiple reports from process 'multiqc', will use only one"
                 mqc_report = mqc_report[0]
             }
         }
     } catch (all) {
-        log.warn "[nf-core/scoop] Could not attach MultiQC report to summary email"
+        log.warn "[nibsbioinformatics/scoop] Could not attach MultiQC report to summary email"
     }
 
     // Check if we are only sending emails on failure
@@ -342,11 +443,11 @@ workflow.onComplete {
             if (params.plaintext_email) { throw GroovyException('Send plaintext e-mail, not HTML') }
             // Try to send HTML e-mail using sendmail
             [ 'sendmail', '-t' ].execute() << sendmail_html
-            log.info "[nf-core/scoop] Sent summary e-mail to $email_address (sendmail)"
+            log.info "[nibsbioinformatics/scoop] Sent summary e-mail to $email_address (sendmail)"
         } catch (all) {
             // Catch failures and try with plaintext
             [ 'mail', '-s', subject, email_address ].execute() << email_txt
-            log.info "[nf-core/scoop] Sent summary e-mail to $email_address (mail)"
+            log.info "[nibsbioinformatics/scoop] Sent summary e-mail to $email_address (mail)"
         }
     }
 
@@ -372,10 +473,10 @@ workflow.onComplete {
     }
 
     if (workflow.success) {
-        log.info "-${c_purple}[nf-core/scoop]${c_green} Pipeline completed successfully${c_reset}-"
+        log.info "-${c_purple}[nibsbioinformatics/scoop]${c_green} Pipeline completed successfully${c_reset}-"
     } else {
         checkHostname()
-        log.info "-${c_purple}[nf-core/scoop]${c_red} Pipeline completed with errors${c_reset}-"
+        log.info "-${c_purple}[nibsbioinformatics/scoop]${c_red} Pipeline completed with errors${c_reset}-"
     }
 
 }
@@ -399,7 +500,7 @@ def nfcoreHeader() {
     ${c_blue}  |\\ | |__  __ /  ` /  \\ |__) |__         ${c_yellow}}  {${c_reset}
     ${c_blue}  | \\| |       \\__, \\__/ |  \\ |___     ${c_green}\\`-._,-`-,${c_reset}
                                             ${c_green}`._,._,\'${c_reset}
-    ${c_purple}  nf-core/scoop v${workflow.manifest.version}${c_reset}
+    ${c_purple}  nibsbioinformatics/scoop v${workflow.manifest.version}${c_reset}
     -${c_dim}--------------------------------------------------${c_reset}-
     """.stripIndent()
 }
@@ -423,4 +524,26 @@ def checkHostname() {
             }
         }
     }
+}
+
+def readInputFile(tsvFile) {
+    Channel.from(tsvFile)
+        .splitCsv(sep: '\t')
+        .map { row ->
+            def idSample  = row[0]
+            def gender     = row[1]
+            def status     = returnStatus(row[2].toInteger())
+            def idRun      = row[3]
+            def file1      = returnFile(row[4])
+            def file2      = "null"
+            if (hasExtension(file1, "fastq.gz") || hasExtension(file1, "fq.gz")) {
+                checkNumberOfItem(row, 6)
+                file2 = returnFile(row[5])
+                if (!hasExtension(file2, "fastq.gz") && !hasExtension(file2, "fq.gz")) exit 1, "File: ${file2} has the wrong extension. See --help for more information"
+            }
+            // else if (hasExtension(file1, "bam")) checkNumberOfItem(row, 5)
+            // here we only use this function for fastq inputs and therefore we suppress bam files
+            else "No recognisable extension for input file: ${file1}"
+            [idPatient, gender, status, idSample, idRun, file1, file2]
+        }
 }

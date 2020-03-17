@@ -21,8 +21,8 @@ jobs:
           sudo mv nextflow /usr/local/bin/
       - name: Pull docker image
         run: |
-          docker pull nfcore/scoop:dev
-          docker tag nfcore/scoop:dev nfcore/scoop:dev
+          docker pull nibscbioinformatics/scoop:dev
+          docker tag nibscbioinformatics/scoop:dev nibscbioinformatics/scoop:dev
       - name: Run pipeline with test data
         run: |
           # TODO nf-core: You can customise CI pipeline run tests as required
