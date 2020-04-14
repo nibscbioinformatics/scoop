@@ -18,16 +18,24 @@ def helpMessage() {
 
     The typical command for running the pipeline is as follows:
 
-    nextflow run nibsbioinformatics/scoop --reads '*_R{1,2}.fastq.gz' -profile docker
+    nextflow run nibscbioinformatics/scoop --input 'sample_file.tsv' -profile docker
 
     Mandatory arguments:
-      --reads [file]                Path to input data (must be surrounded with quotes)
+      --input [file]                Input data TSV file
       -profile [str]                Configuration profile to use. Can use multiple (comma separated)
                                     Available: conda, docker, singularity, test, awsbatch, <institute> and more
 
     Options:
-      --genome [str]                  Name of iGenomes reference
-      --single_end [bool]             Specifies that the input is single-end reads
+      --tool [str]                    Pipeline to use. Can be:
+                                      humann2 - for the entire functional characterisation pipeline
+                                      metaphlan2 - to run just the phylogenetic analysis
+      --protein_db [str]              Protein database to be used for Diamond during humann2 workflow
+                                      Available:
+                                      uniref50_diamond, uniref90_diamond (default),
+                                      uniref50_ec_filtered_diamond, uniref90_ec_filtered_diamond
+
+      --metaphlan_db [str]            Type of database to be used for metaphlan analyses
+                                      Available: blast, bowtie (default)
 
     References                        If not specified in the configuration file or you wish to overwrite any of the references
       --fasta [file]                  Path to fasta reference
@@ -83,11 +91,44 @@ ch_multiqc_config = file("$baseDir/assets/multiqc_config.yaml", checkIfExists: t
 ch_multiqc_custom_config = params.multiqc_config ? Channel.fromPath(params.multiqc_config, checkIfExists: true) : Channel.empty()
 ch_output_docs = file("$baseDir/docs/output.md", checkIfExists: true)
 
+
+/* ##############################################
+*  INITIALISE DATABASE FILES
+*  ##############################################
+*/
+
+// Check if database exists in the config file
+if (params.tool && !params.databases.containsKey(params.tool)) {
+    exit 1, "The requested tool '${params.tool}' is not available and no database is associated with it. Currently the available databases are ${params.databases.keySet().join(", ")}"
+}
+
+// no ifs based on selected tool, if database for that tool doesn't exist will set param as null
+params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
+params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_diamond ?: null : null
+params.uniref90_diamond = params.tool ? params.databases[params.tool].uniref90_diamond ?: null : null
+params.uniref50_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref50_ec_filtered_diamond ?: null : null
+params.uniref90_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref90_ec_filtered_diamond ?: null : null
+params.utility_mapping = params.tool ? params.databases[params.tool].utility_mapping ?: null : null
+
+params.blast = params.tool ? params.databases[params.tool].blast ?: null : null
+params.bowtie = params.tool ? params.databases[params.tool].bowtie ?: null : null
+
+// similarly will happen for the channels
+// Initialize channels based on params
+ch_chocophlan = params.chocophlan ? Channel.value(file(params.chocophlan)) : "null"
+ch_uniref50_diamond = params.uniref50_diamond ? Channel.value(file(params.uniref50_diamond)) : "null"
+ch_uniref90_diamond = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null"
+ch_uniref50_ec_filtered_diamond = params.uniref50_ec_filtered_diamond ? Channel.value(file(params.uniref50_ec_filtered_diamond)) : "null"
+ch_uniref90_ec_filtered_diamond = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null"
+ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_mapping)) : "null"
+
+ch_blast = params.blast ? Channel.value(file(params.blast)) : "null"
+ch_bowtie = params.bowtie ? Channel.value(file(params.bowtie)) : "null"
+
 /* ############################################
  * Create a channel for input read files
  * ############################################
  */
-
 
 inputSample = Channel.empty()
 if (params.input) {
@@ -250,6 +291,8 @@ process characteriseReads {
 
   publishDir "${params.output_dir}", mode: 'copy'
 
+  when: params.tool == 'humann2'
+
   input:
   set sampleId, file(reads) from samples_ch
 
@@ -283,6 +326,8 @@ process joinGenes {
   containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
 
   publishDir "${params.output_dir}", mode: 'copy'
+
+  when: params.tool == 'humann2'
 
   input:
   file genetables from gene_families_ch.collect()
@@ -318,6 +363,8 @@ process joinPathways {
   containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
 
   publishDir "${params.output_dir}", mode: 'copy'
+
+  when: params.tool == 'humann2'
 
   input:
   file pathtables from path_abundance_ch.collect()
