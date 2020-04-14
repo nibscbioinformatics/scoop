@@ -1,6 +1,6 @@
 FROM nfcore/base:1.9
 LABEL authors="Francesco Lescai" \
-      description="Docker image containing all software requirements for the nibsbioinformatics/scoop pipeline"
+      description="Docker image containing all software requirements for the nibscbioinformatics/scoop pipeline"
 
 # Install the conda environment
 COPY environment.yml /
