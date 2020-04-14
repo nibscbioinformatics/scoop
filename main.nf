@@ -21,24 +21,28 @@ def helpMessage() {
     nextflow run nibscbioinformatics/scoop --input 'sample_file.tsv' -profile docker
 
     Mandatory arguments:
-      --input [file]                Input data TSV file
-      -profile [str]                Configuration profile to use. Can use multiple (comma separated)
-                                    Available: conda, docker, singularity, test, awsbatch, <institute> and more
+      --input [file]                  Input data TSV file
 
-    Options:
+      -profile [str]                  Configuration profile to use. Can use multiple (comma separated)
+                                      Available: conda, docker, singularity, test, awsbatch, <institute> and more
+
       --tool [str]                    Pipeline to use. Can be:
                                       humann2 - for the entire functional characterisation pipeline
                                       metaphlan2 - to run just the phylogenetic analysis
-      --protein_db [str]              Protein database to be used for Diamond during humann2 workflow
+
+      --protein_db [str]              Protein database to be used for Diamond if humann2 workflow has been selected.
                                       Available:
                                       uniref50_diamond, uniref90_diamond (default),
-                                      uniref50_ec_filtered_diamond, uniref90_ec_filtered_diamond
+                                      uniref50_ec_filtered_diamond, uniref90_ec_filtered_diamond.
+                                      If custom, a location or URL should be provided.
 
-      --metaphlan_db [str]            Type of database to be used for metaphlan analyses
-                                      Available: blast, bowtie (default)
+      --nucleotide_db [str]           Nucleotide database to be used if humann2 workflow has been selected.
+                                      Default: chocophlan.
+                                      If custom, a location or a URL should be provided.
 
-    References                        If not specified in the configuration file or you wish to overwrite any of the references
-      --fasta [file]                  Path to fasta reference
+      --metaphlan_db [str]            Type of database to be used for metaphlan analyses, if metaphlan2 workflow has been chosen.
+                                      Available: blast, bowtie (default).
+                                      If custom, a location or URL should be provided.
 
     Other options:
       --outdir [file]                 The output directory where the results will be saved
@@ -102,6 +106,18 @@ if (params.tool && !params.databases.containsKey(params.tool)) {
     exit 1, "The requested tool '${params.tool}' is not available and no database is associated with it. Currently the available databases are ${params.databases.keySet().join(", ")}"
 }
 
+// if params.nucleotide_db is empty, it will default to chocophlan
+// if not empty, but is not chocophlan we assume it's a URL or local file
+
+if (!params.nucleotide_db) {
+  params.nucletide_db = 'chocophlan'
+}
+
+// similarly, if metaphlan_db is empty it will default to bowtie
+if (!params.metaphlan_db) {
+  params.metaphlan_db = 'bowtie'
+}
+
 // no ifs based on selected tool, if database for that tool doesn't exist will set param as null
 params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
 params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_diamond ?: null : null
@@ -113,17 +129,61 @@ params.utility_mapping = params.tool ? params.databases[params.tool].utility_map
 params.blast = params.tool ? params.databases[params.tool].blast ?: null : null
 params.bowtie = params.tool ? params.databases[params.tool].bowtie ?: null : null
 
-// similarly will happen for the channels
-// Initialize channels based on params
-ch_chocophlan = params.chocophlan ? Channel.value(file(params.chocophlan)) : "null"
-ch_uniref50_diamond = params.uniref50_diamond ? Channel.value(file(params.uniref50_diamond)) : "null"
-ch_uniref90_diamond = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null"
-ch_uniref50_ec_filtered_diamond = params.uniref50_ec_filtered_diamond ? Channel.value(file(params.uniref50_ec_filtered_diamond)) : "null"
-ch_uniref90_ec_filtered_diamond = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null"
+
 ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_mapping)) : "null"
 
-ch_blast = params.blast ? Channel.value(file(params.blast)) : "null"
-ch_bowtie = params.bowtie ? Channel.value(file(params.bowtie)) : "null"
+// channels are set based on parameters
+// or as local file or URL if none of the name matches (i.e. using switch default)
+
+ch_nucleotide_db = Channel.empty()
+ch_protein_db = Channel.empty()
+ch_mapping_db = Channel.empty()
+
+if (params.tool == 'humann2'){
+  switch (params.nucleotide_db) {
+    case 'chocophlan':
+          ch_nucleotide_db = params.chocophlan ? Channel.value(file(params.chocophlan)) : "null";
+          break;
+    default:
+          ch_nucleotide_db = params.nucletide_db ? Channel.value(file(params.nucletide_db)) : "null";
+          break;
+  }
+  switch (params.protein_db) {
+    case 'uniref50_diamond':
+          ch_protein_db = params.uniref50_diamond ? Channel.value(file(params.uniref50_diamond)) : "null";
+          break;
+
+    case 'uniref90_diamond':
+          ch_protein_db = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null";
+          break;
+
+    case 'uniref50_ec_filtered_diamond':
+          ch_protein_db = params.uniref50_ec_filtered_diamond ? Channel.value(file(params.uniref50_ec_filtered_diamond)) : "null";
+          break;
+
+    case 'uniref90_ec_filtered_diamond':
+          ch_protein_db = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null";
+          break;
+
+    default:
+          ch_protein_db = params.protein_db ? Channel.value(file(params.protein_db)) : "null";
+          break;
+  }
+} else if (params.tool == 'metaphlan2') {
+  switch(params.metaphlan_db){
+    case 'blast':
+          ch_mapping_db = params.blast ? Channel.value(file(params.blast)) : "null";
+          break;
+    case 'bowtie':
+          ch_mapping_db = params.bowtie ? Channel.value(file(params.bowtie)) : "null";
+          break;
+    default:
+          ch_mapping_db = params.metaphlan_db ? Channel.value(file(params.metaphlan_db)) : "null";
+          break;
+  }
+}
+
+
 
 /* ############################################
  * Create a channel for input read files
@@ -295,22 +355,23 @@ process characteriseReads {
 
   input:
   set sampleId, file(reads) from samples_ch
+  set idPatient, gender, status, idSample, idRun, file(read1), file(read2) from inputSample
 
   output:
-  file("${sampleId}/*genefamilies.tsv") into gene_families_ch
-  file("${sampleId}/*pathabundance.tsv") into path_abundance_ch
-  file("${sampleId}/*pathcoverage.tsv")
-  file("${sampleId}/${sampleId}_concat_humann2_temp/${sampleId}_concat_metaphlan_bowtie2.txt")
-  file("${sampleId}/${sampleId}_concat_humann2_temp/${sampleId}_concat_metaphlan_bugs_list.tsv")
+  file("${idPatient}/*genefamilies.tsv") into gene_families_ch
+  file("${idPatient}/*pathabundance.tsv") into path_abundance_ch
+  file("${idPatient}/*pathcoverage.tsv")
+  file("${idPatient}/${idPatient}_concat_humann2_temp/${idPatient}_concat_metaphlan_bowtie2.txt")
+  file("${idPatient}/${idPatient}_concat_humann2_temp/${idPatient}_concat_metaphlan_bugs_list.tsv")
 
   script:
 
   """
-  cat $reads >${sampleId}_concat.fastq.gz
+  cat ${read1} ${read2} >${idPatient}_concat.fastq.gz
 
   humann2 \
-  --input ${sampleId}_concat.fastq.gz \
-  --output ${sampleId} \
+  --input ${idPatient}_concat.fastq.gz \
+  --output ${idPatient} \
   --threads ${task.cpus}
   """
 }
