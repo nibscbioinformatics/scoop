@@ -354,8 +354,9 @@ process characteriseReads {
   when: params.tool == 'humann2'
 
   input:
-  set sampleId, file(reads) from samples_ch
   set idPatient, gender, status, idSample, idRun, file(read1), file(read2) from inputSample
+  set file(nucleotide_db) from ch_nucleotide_db
+  set file(protein_db) from ch_protein_db
 
   output:
   file("${idPatient}/*genefamilies.tsv") into gene_families_ch
@@ -371,6 +372,8 @@ process characteriseReads {
 
   humann2 \
   --input ${idPatient}_concat.fastq.gz \
+  --nucleotide-database ${nucleotide_db} \
+  --protein-database ${protein_db} \
   --output ${idPatient} \
   --threads ${task.cpus}
   """
