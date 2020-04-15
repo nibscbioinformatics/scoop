@@ -13,3 +13,4 @@ dependencies:
   - bioconda::fastqc=0.11.8
   - bioconda::multiqc=1.7
   - bioconda::humann2=2.8.1
+  - bioconda::metaphlan2=2.7.8
