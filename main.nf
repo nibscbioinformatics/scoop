@@ -791,17 +791,25 @@ def readInputFile(tsvFile) {
         }
 }
 
+// #### SAREK FUNCTIONS #########################
+def checkNumberOfItem(row, number) {
+    if (row.size() != number) exit 1, "Malformed row in TSV file: ${row}, see --help for more information"
+    return true
+}
 
 def hasExtension(it, extension) {
     it.toString().toLowerCase().endsWith(extension.toLowerCase())
-  }
+}
 
+// Return file if it exists
 def returnFile(it) {
     if (!file(it).exists()) exit 1, "Missing file in TSV file: ${it}, see --help for more information"
     return file(it)
-  }
+}
 
+// Return status [0,1]
+// 0 == Control, 1 == Case
 def returnStatus(it) {
     if (!(it in [0, 1])) exit 1, "Status is not recognized in TSV file: ${it}, see --help for more information"
     return it
-  }
+}
