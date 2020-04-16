@@ -30,19 +30,26 @@ def helpMessage() {
                                       humann2 - for the entire functional characterisation pipeline
                                       metaphlan2 - to run just the phylogenetic analysis
 
+      Optional arguments:
+
       --protein_db [str]              Protein database to be used for Diamond if humann2 workflow has been selected.
                                       Available:
                                       uniref50_diamond, uniref90_diamond (default),
                                       uniref50_ec_filtered_diamond, uniref90_ec_filtered_diamond.
-                                      If custom, a location or URL should be provided.
+                                      If custom, a folder location or the URL of a TAR file should be provided.
 
       --nucleotide_db [str]           Nucleotide database to be used if humann2 workflow has been selected.
                                       Default: chocophlan.
-                                      If custom, a location or a URL should be provided.
+                                      If custom, a folder location or the URL of a TAR file should be provided.
 
-      --metaphlan_db [str]            Type of database to be used for metaphlan analyses, if metaphlan2 workflow has been chosen.
-                                      Available: blast, bowtie (default).
-                                      If custom, a location or URL should be provided.
+      --metaphlan_db [str]            Bowtie DB to be used for metaphlan2.
+                                      If empty, uses default mpa_v20_m200 database.
+                                      If custom, a folder location with properly bowtie indexed db should be provided or URL with a TAR file should be provided.
+                                      The file name prefix should always be in the format mpa_index where index is specified with following option.
+
+      --mpa_index [str]               If custom metaphlan2 database is provided, the second part of the prefix in the file name needs to be specificed, otherwise
+                                      the software will assume it is v20_m200.
+                                      Do not include any preceding underscore which will be added by default between the mandatory mpa previx and the index.
 
     Other options:
       --outdir [file]                 The output directory where the results will be saved
@@ -67,10 +74,6 @@ if (params.help) {
 /*
  * SET UP CONFIGURATION VARIABLES
  */
-
-// TODO nf-core: Add any reference files that are needed
-// Configurable reference genomes
-//
 
 
 // Has the run name been specified by the user?
@@ -109,14 +112,15 @@ if (params.tool && !params.databases.containsKey(params.tool)) {
 // if params.nucleotide_db is empty, it will default to chocophlan
 // if not empty, but is not chocophlan we assume it's a URL or local file
 
-if (!params.nucleotide_db) {
-  params.nucletide_db = 'chocophlan'
-}
+params.nucletide_db = params.nucletide_db ? params.nucletide_db : 'chocophlan'
 
-// similarly, if metaphlan_db is empty it will default to bowtie
-if (!params.metaphlan_db) {
-  params.metaphlan_db = 'bowtie'
-}
+// if params.protein_db is empty, it will default to uniref90
+
+params.protein_db = params.protein_db ? params.protein_db : 'uniref90_diamond'
+
+params.metaphlan_db = params.metaphlan_db ? params.metaphlan_db : 'bowtie'
+params.mpa_index = params.mpa_index ? params.mpa_index : 'v20_m200'
+
 
 // no ifs based on selected tool, if database for that tool doesn't exist will set param as null
 params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
@@ -124,10 +128,10 @@ params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_d
 params.uniref90_diamond = params.tool ? params.databases[params.tool].uniref90_diamond ?: null : null
 params.uniref50_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref50_ec_filtered_diamond ?: null : null
 params.uniref90_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref90_ec_filtered_diamond ?: null : null
-params.utility_mapping = params.tool ? params.databases[params.tool].utility_mapping ?: null : null
 
-params.blast = params.tool ? params.databases[params.tool].blast ?: null : null
-params.bowtie = params.tool ? params.databases[params.tool].bowtie ?: null : null
+// metaphlan default db needs to be downloaded and prepared anyway
+params.bowtie = params.databases['metaphlan2'].bowtie
+params.mpamdd5 = params.databases['metaphlan2'].md5
 
 
 ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_mapping)) : "null"
@@ -137,7 +141,13 @@ ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_
 
 ch_nucleotide_db = Channel.empty()
 ch_protein_db = Channel.empty()
-ch_mapping_db = Channel.empty()
+ch_metaphlan_db = Channel.empty()
+// search mode will vary according to the selected database
+params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
+
+// metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
+// or when it's default
+params.mpaType = params.mpaType ? params.mpaType : 'default'
 
 if (params.tool == 'humann2'){
   switch (params.nucleotide_db) {
@@ -155,6 +165,7 @@ if (params.tool == 'humann2'){
 
     case 'uniref90_diamond':
           ch_protein_db = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null";
+          params.search_mode = 'uniref90';
           break;
 
     case 'uniref50_ec_filtered_diamond':
@@ -163,24 +174,24 @@ if (params.tool == 'humann2'){
 
     case 'uniref90_ec_filtered_diamond':
           ch_protein_db = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null";
+          params.search_mode = 'uniref90';
           break;
 
     default:
           ch_protein_db = params.protein_db ? Channel.value(file(params.protein_db)) : "null";
           break;
   }
-} else if (params.tool == 'metaphlan2') {
-  switch(params.metaphlan_db){
-    case 'blast':
-          ch_mapping_db = params.blast ? Channel.value(file(params.blast)) : "null";
-          break;
-    case 'bowtie':
-          ch_mapping_db = params.bowtie ? Channel.value(file(params.bowtie)) : "null";
-          break;
-    default:
-          ch_mapping_db = params.metaphlan_db ? Channel.value(file(params.metaphlan_db)) : "null";
-          break;
-  }
+}
+
+// metaphlan db is always used or custome, but always present
+switch(params.metaphlan_db){
+  case 'bowtie':
+        ch_metaphlan_db = params.bowtie ? Channel.value(file(params.bowtie)) : "null";
+        break;
+  default:
+        ch_metaphlan_db = params.metaphlan_db ? Channel.value(file(params.metaphlan_db)) : "null";
+        params.mpaType = 'custom';
+        break;
 }
 
 
@@ -200,7 +211,9 @@ else {
   exit 1, 'No sample were defined, see --help'
 }
 
+// split the channel into reading processes
 
+(inputSampleFastqc, inputSampleHumann2, inputSampleMetaphlan2) = inputSample.into(3)
 
 
 // Header log info
@@ -286,20 +299,21 @@ process get_software_versions {
 process fastqc {
     tag "$name"
     label 'process_medium'
-    publishDir "${params.outdir}/fastqc", mode: 'copy',
+    publishDir "${params.outdir}/${idSample}/fastqc", mode: 'copy',
         saveAs: { filename ->
                       filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"
                 }
 
     input:
-    set val(name), file(reads) from ch_read_files_fastqc
+    set idSample, gender, status, file(read1), file(read2) from inputSampleFastqc
 
     output:
     file "*_fastqc.{zip,html}" into ch_fastqc_results
 
     script:
     """
-    fastqc --quiet --threads $task.cpus $reads
+    fastqc --quiet --threads $task.cpus $read1
+    fastqc --quiet --threads $task.cpus $read2
     """
 }
 
@@ -312,7 +326,7 @@ process multiqc {
     input:
     file (multiqc_config) from ch_multiqc_config
     file (mqc_custom_config) from ch_multiqc_custom_config.collect().ifEmpty([])
-    // TODO nf-core: Add in log files from your new processes for MultiQC to find!
+    // Add in log files from your new processes for MultiQC to find!
     file ('fastqc/*') from ch_fastqc_results.collect().ifEmpty([])
     file ('software_versions/*') from ch_software_versions_yaml.collect()
     file workflow_summary from ch_workflow_summary.collectFile(name: "workflow_summary_mqc.yaml")
@@ -326,11 +340,124 @@ process multiqc {
     rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
     rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
     custom_config_file = params.multiqc_config ? "--config $mqc_custom_config" : ''
-    // TODO nf-core: Specify which MultiQC modules to use with -m for a faster run time
+    // OK for now: Specify which MultiQC modules to use with -m for a faster run time
     """
     multiqc -f $rtitle $rfilename $custom_config_file .
     """
 }
+
+
+process prepNucleotideDB {
+
+  tag "prepare nucletide db"
+  label "process_small"
+
+  input:
+  set file(nucleotide_database) from ch_nucleotide_db
+
+  output:
+  path("nucleotidedb", type: 'dir' ) into ch_nucleotidedb_ready
+
+  script:
+  """
+  mkdir nucleotidedb
+  cd nucleotidedb
+
+  tar -xvzf ${nucleotide_database}
+
+  """
+
+
+
+}
+
+process prepProteinDB {
+  tag "prepare protein db"
+  label "process_small"
+
+  input:
+  set file(protein_database) from ch_protein_db
+
+  output:
+  path("proteindb", type: 'dir' ) into ch_proteindb_ready
+
+  script:
+  """
+  mkdir proteindb
+  cd proteindb
+
+  tar -xvzf ${protein_database}
+  """
+
+
+}
+
+
+process prepMetaphlanDB {
+  tag "prepare metaphlan db"
+  label "process_small"
+
+  input:
+  set file(metaphlan_database) from ch_metaphlan_db
+  set file(md5) from Channel.fromPath(params.mpamdd5)
+
+  output:
+  path(, type: 'dir' ) into ch_metaphlandb_ready
+
+  when: params.mpaType == 'default'
+
+  script:
+  """
+  mkdir mpadb
+  mv ${md5} mpadb/.
+  cp ${metaphlan_database} mpadb/.
+  cd mpadb
+
+  tar -xvf ${metaphlan_database}
+  bzip2 -d mpa_v20_m200.fna.bz2
+  bowtie2-build mpa_v20_m200.fna ./mpa_v20_m200
+
+  """
+}
+
+process prepMetaphlanDBCustom {
+  // ################################
+  // this still needs to be developed
+  // TO-DO
+  // ################################
+}
+
+
+
+process metaphlanOnly {
+
+  tag "metaphlan2 $idSample"
+
+  label 'process_medium'
+  publishDir "${params.output_dir}/${idSample}", mode: 'copy'
+
+  input:
+  set idSample, gender, status, file(read1), file(read2) from inputSampleMetaphlan2
+
+  script:
+
+  """
+  cat ${read1} ${read2} >${idSample}_concat.fastq.gz
+
+  metaphlan2.py \
+  --input_type fastq \
+  --tmp_dir=. \
+  --bowtie2out=${idSample}_bt2out.txt \
+  --mpa_pkl $mpa_pkl \
+  --bowtie2db $bowtie2db/$params.bowtie2dbfiles \
+  --index ${params.mpa_index} \
+  --nproc ${task.cpus} \
+  ${idSample}_concat.fastq.gz \
+  ${idSample}_metaphlan_bugs_list.tsv\
+  """
+
+}
+
 
 
 /*
@@ -354,27 +481,28 @@ process characteriseReads {
   when: params.tool == 'humann2'
 
   input:
-  set idPatient, gender, status, idSample, idRun, file(read1), file(read2) from inputSample
+  set idSample, gender, status, file(read1), file(read2) from inputSampleHumann2
   set file(nucleotide_db) from ch_nucleotide_db
   set file(protein_db) from ch_protein_db
 
   output:
-  file("${idPatient}/*genefamilies.tsv") into gene_families_ch
-  file("${idPatient}/*pathabundance.tsv") into path_abundance_ch
-  file("${idPatient}/*pathcoverage.tsv")
-  file("${idPatient}/${idPatient}_concat_humann2_temp/${idPatient}_concat_metaphlan_bowtie2.txt")
-  file("${idPatient}/${idPatient}_concat_humann2_temp/${idPatient}_concat_metaphlan_bugs_list.tsv")
+  file("${idSample}/*genefamilies.tsv") into gene_families_ch
+  file("${idSample}/*pathabundance.tsv") into path_abundance_ch
+  file("${idSample}/*pathcoverage.tsv")
+  file("${idSample}/${idSample}_concat_humann2_temp/${idSample}_concat_metaphlan_bowtie2.txt")
+  file("${idSample}/${idSample}_concat_humann2_temp/${idSample}_concat_metaphlan_bugs_list.tsv")
 
   script:
 
   """
-  cat ${read1} ${read2} >${idPatient}_concat.fastq.gz
+  cat ${read1} ${read2} >${idSample}_concat.fastq.gz
 
   humann2 \
-  --input ${idPatient}_concat.fastq.gz \
+  --input ${idSample}_concat.fastq.gz \
   --nucleotide-database ${nucleotide_db} \
   --protein-database ${protein_db} \
-  --output ${idPatient} \
+  --metaphlan-options \"--bowtie2db /usr/share/sequencing/references/metagenomes/metaphlan2/bowtiedb --index v20_m200\" \
+  --output ${idSample} \
   --threads ${task.cpus}
   """
 }
@@ -644,17 +772,16 @@ def readInputFile(tsvFile) {
             def idSample  = row[0]
             def gender     = row[1]
             def status     = returnStatus(row[2].toInteger())
-            def idRun      = row[3]
-            def file1      = returnFile(row[4])
+            def file1      = returnFile(row[3])
             def file2      = "null"
             if (hasExtension(file1, "fastq.gz") || hasExtension(file1, "fq.gz")) {
-                checkNumberOfItem(row, 6)
-                file2 = returnFile(row[5])
+                checkNumberOfItem(row, 5)
+                file2 = returnFile(row[4])
                 if (!hasExtension(file2, "fastq.gz") && !hasExtension(file2, "fq.gz")) exit 1, "File: ${file2} has the wrong extension. See --help for more information"
             }
             // else if (hasExtension(file1, "bam")) checkNumberOfItem(row, 5)
             // here we only use this function for fastq inputs and therefore we suppress bam files
             else "No recognisable extension for input file: ${file1}"
-            [idPatient, gender, status, idSample, idRun, file1, file2]
+            [idSample, gender, status, file1, file2]
         }
 }
