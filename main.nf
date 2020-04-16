@@ -223,7 +223,6 @@ if (workflow.revision) summary['Pipeline Release'] = workflow.revision
 summary['Run Name']         = custom_runName ?: workflow.runName
 // TODO nf-core: Report custom parameters here
 summary['Reads']            = params.reads
-summary['Fasta Ref']        = params.fasta
 summary['Data Type']        = params.single_end ? 'Single-End' : 'Paired-End'
 summary['Max Resources']    = "$params.max_memory memory, $params.max_cpus cpus, $params.max_time time per job"
 if (workflow.containerEngine) summary['Container'] = "$workflow.containerEngine - $workflow.container"
@@ -777,7 +776,7 @@ def readInputFile(tsvFile) {
         .map { row ->
             def idSample  = row[0]
             def gender     = row[1]
-            def status     = returnStatus(row[2].toInteger())
+            def status     = row[2].toInteger()
             def file1      = returnFile(row[3])
             def file2      = "null"
             if (hasExtension(file1, "fastq.gz") || hasExtension(file1, "fq.gz")) {
