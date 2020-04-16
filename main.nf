@@ -790,3 +790,18 @@ def readInputFile(tsvFile) {
             [idSample, gender, status, file1, file2]
         }
 }
+
+
+def hasExtension(it, extension) {
+    it.toString().toLowerCase().endsWith(extension.toLowerCase())
+  }
+
+def returnFile(it) {
+    if (!file(it).exists()) exit 1, "Missing file in TSV file: ${it}, see --help for more information"
+    return file(it)
+  }
+
+def returnStatus(it) {
+    if (!(it in [0, 1])) exit 1, "Status is not recognized in TSV file: ${it}, see --help for more information"
+    return it
+  }
