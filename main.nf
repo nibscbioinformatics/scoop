@@ -29,7 +29,7 @@ if (params.tool && !params.databases.containsKey(params.tool)) {
 // if params.nucleotide_db is empty, it will default to chocophlan
 // if not empty, but is not chocophlan we assume it's a URL or local file
 
-params.nucletide_db = params.nucletide_db ? params.nucletide_db : 'chocophlan'
+params.nucleotide_db = params.nucleotide_db ? params.nucleotide_db : 'chocophlan'
 
 // if params.protein_db is empty, it will default to uniref90
 
