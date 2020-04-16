@@ -352,7 +352,7 @@ process prepNucleotideDB {
   label "process_small"
 
   input:
-  set file(nucleotide_database) from ch_nucleotide_db
+  file(nucleotide_database) from ch_nucleotide_db
 
   output:
   path("nucleotidedb", type: 'dir' ) into ch_nucleotidedb_ready
@@ -375,7 +375,7 @@ process prepProteinDB {
   label "process_small"
 
   input:
-  set file(protein_database) from ch_protein_db
+  file(protein_database) from ch_protein_db
 
   output:
   path("proteindb", type: 'dir' ) into ch_proteindb_ready
@@ -397,8 +397,8 @@ process prepMetaphlanDB {
   label "process_small"
 
   input:
-  set file(metaphlan_database) from ch_metaphlan_db
-  set file(md5) from Channel.fromPath(params.mpamdd5)
+  file(metaphlan_database) from ch_metaphlan_db
+  file(md5) from Channel.fromPath(params.mpamdd5)
 
   output:
   path("mpadb", type: 'dir' ) into (ch_metaphlandb_ready_mpaonly, ch_metaphlandb_ready_humann2)
