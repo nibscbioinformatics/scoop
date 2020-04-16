@@ -420,12 +420,12 @@ process prepMetaphlanDB {
   """
 }
 
-process prepMetaphlanDBCustom {
+//process prepMetaphlanDBCustom {
   // ################################
   // this still needs to be developed
   // TO-DO
   // ################################
-}
+//}
 
 
 
