@@ -9,6 +9,22 @@
 ----------------------------------------------------------------------------------------
 */
 
+
+/*
+=============================================================================
+### SET PARAMETERS OTHERWISE UNDEFINED with default false value
+============================================================================
+*/
+
+params.nucletide_db = false
+params.protein_db = false
+params.metaphlan_db = false
+params.mpa_index = false
+params.search_mode = false
+params.mpaType = false
+
+// =======================================================================
+
 def helpMessage() {
     // TODO nf-core: Add to this help message with new command line parameters
     log.info nfcoreHeader()
@@ -595,7 +611,7 @@ process joinPathways {
 
 /*
  * STEP 3 - Output Description HTML
- */
+
 process output_documentation {
     publishDir "${params.outdir}/pipeline_info", mode: 'copy'
 
@@ -610,6 +626,7 @@ process output_documentation {
     markdown_to_html.py $output_docs -o results_description.html
     """
 }
+*/
 
 /*
  * Completion e-mail notification
