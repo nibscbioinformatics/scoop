@@ -450,7 +450,7 @@ process metaphlanOnly {
   tag "metaphlan2 $idSample"
 
   label 'process_medium'
-  publishDir "${params.output_dir}/${idSample}/metaphlan2", mode: 'copy'
+  publishDir "${params.outdir}/${idSample}/metaphlan2", mode: 'copy'
 
   input:
   set idSample, gender, status, file(read1), file(read2) from inputSampleMetaphlan2
@@ -495,9 +495,9 @@ process characteriseReads {
   queue 'WORK'
   time '360h'
   memory '32 GB'
-  containerOptions = "-B ${params.reads} -B ${params.output_dir}"
+  containerOptions = "-B ${params.reads} -B ${params.outdir}"
 
-  publishDir "${params.output_dir}", mode: 'copy'
+  publishDir "${params.outdir}", mode: 'copy'
 
   when: params.tool == 'humann2'
 
@@ -537,9 +537,9 @@ process joinGenes {
   queue 'WORK'
   time '12h'
   memory '6 GB'
-  containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
+  containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
 
-  publishDir "${params.output_dir}", mode: 'copy'
+  publishDir "${params.outdir}", mode: 'copy'
 
   when: params.tool == 'humann2'
 
@@ -574,9 +574,9 @@ process joinPathways {
   queue 'WORK'
   time '12h'
   memory '6 GB'
-  containerOptions = "-B ${params.reads} -B ${params.output_dir} -B $PWD"
+  containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
 
-  publishDir "${params.output_dir}", mode: 'copy'
+  publishDir "${params.outdir}", mode: 'copy'
 
   when: params.tool == 'humann2'
 
