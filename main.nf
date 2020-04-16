@@ -402,7 +402,7 @@ process prepMetaphlanDB {
   set file(md5) from Channel.fromPath(params.mpamdd5)
 
   output:
-  path(, type: 'dir' ) into ch_metaphlandb_ready
+  path("mpadb", type: 'dir' ) into (ch_metaphlandb_ready_mpaonly, ch_metaphlandb_ready_humann2)
 
   when: params.mpaType == 'default'
 
@@ -438,6 +438,7 @@ process metaphlanOnly {
 
   input:
   set idSample, gender, status, file(read1), file(read2) from inputSampleMetaphlan2
+  path(mpadb) from ch_metaphlandb_ready_mpaonly
 
   script:
 
@@ -448,8 +449,7 @@ process metaphlanOnly {
   --input_type fastq \
   --tmp_dir=. \
   --bowtie2out=${idSample}_bt2out.txt \
-  --mpa_pkl $mpa_pkl \
-  --bowtie2db $bowtie2db/$params.bowtie2dbfiles \
+  --bowtie2db ${mpadb} \
   --index ${params.mpa_index} \
   --nproc ${task.cpus} \
   ${idSample}_concat.fastq.gz \
@@ -482,8 +482,9 @@ process characteriseReads {
 
   input:
   set idSample, gender, status, file(read1), file(read2) from inputSampleHumann2
-  set file(nucleotide_db) from ch_nucleotide_db
-  set file(protein_db) from ch_protein_db
+  path(nucleotide_db) from ch_nucleotidedb_ready
+  path(protein_db) from ch_proteindb_ready
+  path(mpadb) from ch_metaphlandb_ready_humann2
 
   output:
   file("${idSample}/*genefamilies.tsv") into gene_families_ch
@@ -501,7 +502,7 @@ process characteriseReads {
   --input ${idSample}_concat.fastq.gz \
   --nucleotide-database ${nucleotide_db} \
   --protein-database ${protein_db} \
-  --metaphlan-options \"--bowtie2db /usr/share/sequencing/references/metagenomes/metaphlan2/bowtiedb --index v20_m200\" \
+  --metaphlan-options \"--bowtie2db ${mpadb} --index ${params.mpa_index}\" \
   --output ${idSample} \
   --threads ${task.cpus}
   """
