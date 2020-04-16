@@ -434,11 +434,16 @@ process metaphlanOnly {
   tag "metaphlan2 $idSample"
 
   label 'process_medium'
-  publishDir "${params.output_dir}/${idSample}", mode: 'copy'
+  publishDir "${params.output_dir}/${idSample}/metaphlan2", mode: 'copy'
 
   input:
   set idSample, gender, status, file(read1), file(read2) from inputSampleMetaphlan2
   path(mpadb) from ch_metaphlandb_ready_mpaonly
+
+  output:
+  file("${idSample}_metaphlan_bugs_list.tsv") into ch_metaphlan_results
+
+  when: params.tool == 'metaphlan2'
 
   script:
 
