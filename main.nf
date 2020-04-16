@@ -16,12 +16,50 @@
 ============================================================================
 */
 
-params.nucletide_db = false
-params.protein_db = false
-params.metaphlan_db = false
-params.mpa_index = false
-params.search_mode = false
-params.mpaType = false
+/* ##############################################
+*  INITIALISE DATABASE FILES
+*  ##############################################
+*/
+
+// Check if database exists in the config file
+if (params.tool && !params.databases.containsKey(params.tool)) {
+    exit 1, "The requested tool '${params.tool}' is not available and no database is associated with it. Currently the available databases are ${params.databases.keySet().join(", ")}"
+}
+
+// if params.nucleotide_db is empty, it will default to chocophlan
+// if not empty, but is not chocophlan we assume it's a URL or local file
+
+params.nucletide_db = params.nucletide_db ? params.nucletide_db : 'chocophlan'
+
+// if params.protein_db is empty, it will default to uniref90
+
+params.protein_db = params.protein_db ? params.protein_db : 'uniref90_diamond'
+
+params.metaphlan_db = params.metaphlan_db ? params.metaphlan_db : 'bowtie'
+params.mpa_index = params.mpa_index ? params.mpa_index : 'v20_m200'
+
+
+// no ifs based on selected tool, if database for that tool doesn't exist will set param as null
+params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
+params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_diamond ?: null : null
+params.uniref90_diamond = params.tool ? params.databases[params.tool].uniref90_diamond ?: null : null
+params.uniref50_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref50_ec_filtered_diamond ?: null : null
+params.uniref90_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref90_ec_filtered_diamond ?: null : null
+
+// metaphlan default db needs to be downloaded and prepared anyway
+params.bowtie = params.databases['metaphlan2'].bowtie
+params.mpamdd5 = params.databases['metaphlan2'].md5
+
+
+ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_mapping)) : "null"
+
+// search mode will vary according to the selected database
+params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
+
+// metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
+// or when it's default
+params.mpaType = params.mpaType ? params.mpaType : 'default'
+
 
 // =======================================================================
 
@@ -115,42 +153,6 @@ ch_multiqc_custom_config = params.multiqc_config ? Channel.fromPath(params.multi
 ch_output_docs = file("$baseDir/docs/output.md", checkIfExists: true)
 
 
-/* ##############################################
-*  INITIALISE DATABASE FILES
-*  ##############################################
-*/
-
-// Check if database exists in the config file
-if (params.tool && !params.databases.containsKey(params.tool)) {
-    exit 1, "The requested tool '${params.tool}' is not available and no database is associated with it. Currently the available databases are ${params.databases.keySet().join(", ")}"
-}
-
-// if params.nucleotide_db is empty, it will default to chocophlan
-// if not empty, but is not chocophlan we assume it's a URL or local file
-
-params.nucletide_db = params.nucletide_db ? params.nucletide_db : 'chocophlan'
-
-// if params.protein_db is empty, it will default to uniref90
-
-params.protein_db = params.protein_db ? params.protein_db : 'uniref90_diamond'
-
-params.metaphlan_db = params.metaphlan_db ? params.metaphlan_db : 'bowtie'
-params.mpa_index = params.mpa_index ? params.mpa_index : 'v20_m200'
-
-
-// no ifs based on selected tool, if database for that tool doesn't exist will set param as null
-params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
-params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_diamond ?: null : null
-params.uniref90_diamond = params.tool ? params.databases[params.tool].uniref90_diamond ?: null : null
-params.uniref50_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref50_ec_filtered_diamond ?: null : null
-params.uniref90_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref90_ec_filtered_diamond ?: null : null
-
-// metaphlan default db needs to be downloaded and prepared anyway
-params.bowtie = params.databases['metaphlan2'].bowtie
-params.mpamdd5 = params.databases['metaphlan2'].md5
-
-
-ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_mapping)) : "null"
 
 // channels are set based on parameters
 // or as local file or URL if none of the name matches (i.e. using switch default)
@@ -158,12 +160,7 @@ ch_utility_mapping = params.utility_mapping ? Channel.value(file(params.utility_
 ch_nucleotide_db = Channel.empty()
 ch_protein_db = Channel.empty()
 ch_metaphlan_db = Channel.empty()
-// search mode will vary according to the selected database
-params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
 
-// metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
-// or when it's default
-params.mpaType = params.mpaType ? params.mpaType : 'default'
 
 if (params.tool == 'humann2'){
   switch (params.nucleotide_db) {
@@ -238,8 +235,7 @@ def summary = [:]
 if (workflow.revision) summary['Pipeline Release'] = workflow.revision
 summary['Run Name']         = custom_runName ?: workflow.runName
 // TODO nf-core: Report custom parameters here
-summary['Reads']            = params.reads
-summary['Data Type']        = params.single_end ? 'Single-End' : 'Paired-End'
+summary['Input']            = params.input
 summary['Max Resources']    = "$params.max_memory memory, $params.max_cpus cpus, $params.max_time time per job"
 if (workflow.containerEngine) summary['Container'] = "$workflow.containerEngine - $workflow.container"
 summary['Output dir']       = params.outdir
@@ -247,6 +243,10 @@ summary['Launch dir']       = workflow.launchDir
 summary['Working dir']      = workflow.workDir
 summary['Script dir']       = workflow.projectDir
 summary['User']             = workflow.userName
+summary['Analysis Type']    = params.tool
+summary['Metaphlan DB type'] = params.mpaType
+summary['Nucleotide DB']    = params.nucleotide_db
+summary['Protein DB']       = params.protein_db
 if (workflow.profile.contains('awsbatch')) {
     summary['AWS Region']   = params.awsregion
     summary['AWS Queue']    = params.awsqueue
@@ -361,6 +361,7 @@ process multiqc {
     """
 }
 
+ch_nucleotide_db = ch_nucleotide_db.dump(tag:'nucleotide db')
 
 process prepNucleotideDB {
 
@@ -381,10 +382,9 @@ process prepNucleotideDB {
   tar -xvzf ${nucleotide_database}
 
   """
-
-
-
 }
+
+ch_protein_db = ch_protein_db.dump(tag:'protein db')
 
 process prepProteinDB {
   tag "prepare protein db"
@@ -407,6 +407,7 @@ process prepProteinDB {
 
 }
 
+ch_metaphlan_db = ch_metaphlan_db.dump(tag:'metaphlan db')
 
 process prepMetaphlanDB {
   tag "prepare metaphlan db"
