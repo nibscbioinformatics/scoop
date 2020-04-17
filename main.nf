@@ -523,7 +523,7 @@ process mergeMetaphlanOnly {
 
 process characteriseReads {
 
-  tag "humann2 $sampleId"
+  tag "humann2 $idSample"
   cpus 8
   queue 'WORK'
   time '360h'
