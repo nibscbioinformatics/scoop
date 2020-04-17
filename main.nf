@@ -453,7 +453,7 @@ process metaphlanOnly {
 
   tag "metaphlan2 $idSample"
 
-  label 'process_medium'
+  label 'process_high'
   publishDir "${params.outdir}/${idSample}/metaphlan2", mode: 'copy'
 
   input:
@@ -564,10 +564,8 @@ process characteriseReads {
 process joinGenes {
 
   tag "humann2 join genes"
-  cpus 1
-  queue 'WORK'
-  time '12h'
-  memory '6 GB'
+  label 'process_low'
+
   containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
 
   publishDir "${params.outdir}", mode: 'copy'
@@ -601,10 +599,7 @@ process joinGenes {
 process joinPathways {
 
   tag "humann2 join pathways"
-  cpus 1
-  queue 'WORK'
-  time '12h'
-  memory '6 GB'
+  label 'process_low'
   containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
 
   publishDir "${params.outdir}", mode: 'copy'
