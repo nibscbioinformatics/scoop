@@ -374,6 +374,8 @@ process prepNucleotideDB {
   output:
   path("nucleotidedb", type: 'dir' ) into ch_nucleotidedb_ready
 
+  when: tool == 'humann2'
+
   script:
   """
   mkdir nucleotidedb
@@ -396,6 +398,8 @@ process prepProteinDB {
   output:
   path("proteindb", type: 'dir' ) into ch_proteindb_ready
 
+  when: tool == 'humann2'
+
   script:
   """
   mkdir proteindb
@@ -415,7 +419,7 @@ process prepMetaphlanDB {
 
   input:
   file(metaphlan_database) from ch_metaphlan_db
-  file(md5) from Channel.fromPath(params.mpamdd5)
+  file(md5) from Channel.value(file(params.mpamdd5))
 
   output:
   path("mpadb", type: 'dir' ) into (ch_metaphlandb_ready_mpaonly, ch_metaphlandb_ready_humann2)
