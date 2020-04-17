@@ -380,6 +380,7 @@ process prepNucleotideDB {
   script:
   """
   mkdir nucleotidedb
+  mv ${nucleotide_database} nucleotidedb/.
   cd nucleotidedb
 
   tar -xvzf ${nucleotide_database}
@@ -404,6 +405,7 @@ process prepProteinDB {
   script:
   """
   mkdir proteindb
+  mv ${protein_database} proteindb/.
   cd proteindb
 
   tar -xvzf ${protein_database}
@@ -430,7 +432,7 @@ process prepMetaphlanDB {
   """
   mkdir mpadb
   mv ${md5} mpadb/.
-  cp ${metaphlan_database} mpadb/.
+  mv ${metaphlan_database} mpadb/.
   cd mpadb
 
   tar -xvf ${metaphlan_database}
