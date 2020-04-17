@@ -28,16 +28,16 @@ if (params.tool && !params.databases.containsKey(params.tool)) {
 
 // if params.nucleotide_db is empty, it will default to chocophlan
 // if not empty, but is not chocophlan we assume it's a URL or local file
-params.nucleotide_db = defaultIfInexistent({params.nucleotide}, "chocophlan")
+params.nucleotide_db = 'chocophlan'
 //params.nucleotide_db = params.nucleotide_db ? params.nucleotide_db : 'chocophlan'
 
 // if params.protein_db is empty, it will default to uniref90
-params.protein_db = defaultIfInexistent({params.protein_db}, 'uniref90_diamond')
+params.protein_db = 'uniref90_diamond'
 //params.protein_db = params.protein_db ? params.protein_db : 'uniref90_diamond'
-params.metaphlan_db = defaultIfInexistent({params.metaphlan_db}, 'bowtie')
+params.metaphlan_db = 'bowtie'
 //params.metaphlan_db = params.metaphlan_db ? params.metaphlan_db : 'bowtie'
 
-params.mpa_index = defaultIfInexistent({params.mpa_index}, 'v20_m200')
+params.mpa_index = 'v20_m200'
 //params.mpa_index = params.mpa_index ? params.mpa_index : 'v20_m200'
 
 
@@ -54,12 +54,12 @@ params.mpamdd5 = params.databases['metaphlan2'].md5
 
 
 // search mode will vary according to the selected database
-params.search_mode = defaultIfInexistent({params.search_mode}, 'uniref50')
+params.search_mode = 'uniref50'
 //params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
 
 // metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
 // or when it's default
-params.mpaType = defaultIfInexistent({arams.mpaType}, 'default')
+params.mpaType = 'default'
 //params.mpaType = params.mpaType ? params.mpaType : 'default'
 
 
@@ -413,7 +413,6 @@ process prepProteinDB {
 
 }
 
-ch_metaphlan_db = ch_metaphlan_db.dump(tag:'metaphlan db')
 
 process prepMetaphlanDB {
   tag "prepare metaphlan db"
