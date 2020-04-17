@@ -54,7 +54,7 @@ params.mpamdd5 = params.databases['metaphlan2'].md5
 
 
 // search mode will vary according to the selected database
-params.search_mode = 'uniref50'
+params.search_mode = 'uniref90'
 //params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
 
 // metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
@@ -176,11 +176,11 @@ if (params.tool == 'humann2'){
   switch (params.protein_db) {
     case 'uniref50_diamond':
           ch_protein_db = params.uniref50_diamond ? Channel.value(file(params.uniref50_diamond)) : "null";
+          params.search_mode = 'uniref50';
           break;
 
     case 'uniref90_diamond':
           ch_protein_db = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null";
-          params.search_mode = 'uniref90';
           break;
 
     case 'uniref50_ec_filtered_diamond':
@@ -189,7 +189,6 @@ if (params.tool == 'humann2'){
 
     case 'uniref90_ec_filtered_diamond':
           ch_protein_db = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null";
-          params.search_mode = 'uniref90';
           break;
 
     default:
@@ -376,7 +375,7 @@ process prepNucleotideDB {
   output:
   path("nucleotidedb", type: 'dir' ) into ch_nucleotidedb_ready
 
-  when: tool == 'humann2'
+  when: params.tool == 'humann2'
 
   script:
   """
@@ -400,7 +399,7 @@ process prepProteinDB {
   output:
   path("proteindb", type: 'dir' ) into ch_proteindb_ready
 
-  when: tool == 'humann2'
+  when: params.tool == 'humann2'
 
   script:
   """
