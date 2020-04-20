@@ -528,7 +528,6 @@ process characteriseReads {
   queue 'WORK'
   time '360h'
   memory '32 GB'
-  containerOptions = "-B ${params.reads} -B ${params.outdir}"
 
   publishDir "${params.outdir}", mode: 'copy'
 
@@ -568,8 +567,6 @@ process joinGenes {
   tag "humann2 join genes"
   label 'process_low'
 
-  containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
-
   publishDir "${params.outdir}", mode: 'copy'
 
   when: params.tool == 'humann2'
@@ -602,7 +599,6 @@ process joinPathways {
 
   tag "humann2 join pathways"
   label 'process_low'
-  containerOptions = "-B ${params.reads} -B ${params.outdir} -B $PWD"
 
   publishDir "${params.outdir}", mode: 'copy'
 
