@@ -125,7 +125,7 @@ If you are running from within a NIBSC cluster, a *nibsc* profile is also availa
   * sets the right mounts to run on NIBSC HPC cluster
   * uses *slurm* as tasks scheduler
 
-<!-- TODO nf-core: Document required command line parameters -->
+
 
 ### `--input`
 
