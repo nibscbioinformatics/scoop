@@ -29,10 +29,9 @@ nextflow run nf-core/scoop -profile test,<docker/singularity/conda/institute>
 
 iv. Start running your own analysis!
 
-<!-- TODO nf-core: Update the default command above used to run the pipeline -->
 
 ```bash
-nextflow run nf-core/scoop -profile <docker/singularity/conda/institute> --reads '*_R{1,2}.fastq.gz' --genome GRCh37
+nextflow run nf-core/scoop -profile <docker/singularity/conda/institute> --input samples.tsv --tool metaphlan2
 ```
 
 See [usage docs](docs/usage.md) for all of the available options when running the pipeline.
@@ -50,7 +49,7 @@ The nf-core/scoop pipeline comes with documentation about the pipeline, found in
 4. [Output and how to interpret the results](docs/output.md)
 5. [Troubleshooting](https://nf-co.re/usage/troubleshooting)
 
-<!-- TODO nf-core: Add a brief overview of what the pipeline does and how it works -->
+The pipeline runs either Metaphlan2 for taxonomic classification, or the whole Humann2 pipeline for taxonomic and functional genomics analysis of shotgun sequencing reads.
 
 ## Credits
 
