@@ -123,87 +123,49 @@ If you are running from within a NIBSC cluster, a *nibsc* profile is also availa
 * `nibsc`
   * uses singularity by default
   * sets the right mounts to run on NIBSC HPC cluster
-  * uses *slurm* as tasks scheduler 
+  * uses *slurm* as tasks scheduler
 
 <!-- TODO nf-core: Document required command line parameters -->
 
-### `--reads`
+### `--input`
 
-Use this to specify the location of your input FastQ files. For example:
+Use this to specify the Sample names and metadata, as well as the location of your input FastQ files. For example:
 
 ```bash
---reads 'path/to/data/sample_*_{1,2}.fastq'
+--reads 'path/to/data/sample_data.tsv'
 ```
 
 Please note the following requirements:
 
-1. The path must be enclosed in quotes
-2. The path must have at least one `*` wildcard character
-3. When using the pipeline with paired end data, the path must use `{1,2}` notation to specify read pairs.
+1. The path must be enclosed in quotes, and it should refer to a tab separated .tsv file
+2. The first column of the tsv file should be the sample name
+3. The second column of the tsv file should be the gender
+4. The third column of the tsv file should be the sample status (1 for cases, 0 for control or any)
+5. The fourth and fifth columns of the tsv file should be the path to the fastq file of read 1 and read 2 respectively
 
-If left unspecified, a default pattern is used: `data/*{1,2}.fastq.gz`
+The input is always mandatory, unless you are running a test profile.
 
-### `--single_end`
 
-By default, the pipeline expects paired-end data. If you have single-end data, you need to specify `--single_end` on the command line when you launch the pipeline. A normal glob pattern, enclosed in quotation marks, can then be used for `--reads`. For example:
+### `--tool`
 
-```bash
---single_end --reads '*.fastq'
-```
-
-It is not possible to run a mixture of single-end and paired-end files in one run.
-
-## Reference genomes
-
-The pipeline config files come bundled with paths to the illumina iGenomes reference index files. If running with docker or AWS, the configuration is set up to use the [AWS-iGenomes](https://ewels.github.io/AWS-iGenomes/) resource.
-
-### `--genome` (using iGenomes)
-
-There are 31 different species supported in the iGenomes references. To run the pipeline, you must specify which to use with the `--genome` flag.
-
-You can find the keys to specify the genomes in the [iGenomes config file](../conf/igenomes.config). Common genomes that are supported are:
-
-* Human
-  * `--genome GRCh37`
-* Mouse
-  * `--genome GRCm38`
-* _Drosophila_
-  * `--genome BDGP6`
-* _S. cerevisiae_
-  * `--genome 'R64-1-1'`
-
-> There are numerous others - check the config file for more.
-
-Note that you can use the same configuration setup to save sets of reference files for your own use, even if they are not part of the iGenomes resource. See the [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html) for instructions on where to save such a file.
-
-The syntax for this reference configuration is as follows:
-
-<!-- TODO nf-core: Update reference genome example according to what is needed -->
-
-```nextflow
-params {
-  genomes {
-    'GRCh37' {
-      fasta   = '<path to the genome fasta file>' // Used if no star index given
-    }
-    // Any number of additional genomes, key is used with --genome
-  }
-}
-```
-
-<!-- TODO nf-core: Describe reference path flags -->
-
-### `--fasta`
-
-If you prefer, you can specify the full path to your reference genome when you run the pipeline:
+Use this to specify the type of analysis to be run. For example:
 
 ```bash
---fasta '[path to Fasta reference]'
+--tool metaphlan2
 ```
 
-### `--igenomes_ignore`
+The following choices are possible:
 
-Do not load `igenomes.config` when running the pipeline. You may choose this option if you observe clashes between custom parameters and those supplied in `igenomes.config`.
+1. "metaphlan2": this will run only metaphlan2, to perform a phylogenetic classification of the reads
+2. "humann2": this will run the whole humann2 pipeline, which includes phylogenetic classification with metaphlan2 and functional genomics characterisation of the samples.
+
+
+## Databases
+
+The pipeline config files come bundled with paths to the illumina iGenomes reference index files.
+
+
+
 
 ## Job resources
 
