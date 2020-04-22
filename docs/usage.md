@@ -160,11 +160,40 @@ The following choices are possible:
 2. "humann2": this will run the whole humann2 pipeline, which includes phylogenetic classification with metaphlan2 and functional genomics characterisation of the samples.
 
 
-## Databases
 
-The pipeline config files come bundled with paths to the illumina iGenomes reference index files.
+## Standard Databases
 
+The pipeline config files come bundled with paths to the standard database files for:
 
+1. Metaphlan2: *mpa_v20_m200* version of the database
+2. Chocophlan: *full_chocophlan_plus_viral* version
+3. Diamond: several uniref90, uniref50 and filtered version of both
+
+They are automatically downloaded from our Azure blob storage, unpacked and indexed.
+
+## Custom Databases
+
+The current version of the pipeline can only handle custom chocophlan and diamond databases.
+They should be prepared according to instructions, and packed in a **.tar.gz** file.
+The files can be specified at launch, using the options
+
+### `--nucleotide_db`
+
+A file path or the URL where the database *.tar.gz* file can be downloaded from. Example:
+
+```bash
+--nucleotide_db /path/to/database/chocophlan_modified.tar.gz
+```
+
+### `--protein_db`
+
+A file path or the URL where the database *.tar.gz* file can be downloaded from. Example:
+
+```bash
+--protein_db /path/to/database/diamond_modified.tar.gz
+```
+
+NB: **the pipeline can only work with custom version of Metaphlan2 database** in the current release. We do plan to allow custom metaphlan2 databases very soon.
 
 
 ## Job resources
@@ -201,7 +230,7 @@ Please make sure to also set the `-w/--work-dir` and `--outdir` parameters to a 
 
 ## Other command line parameters
 
-<!-- TODO nf-core: Describe any other command line flags here -->
+
 
 ### `--outdir`
 
