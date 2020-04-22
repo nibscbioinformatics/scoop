@@ -49,14 +49,13 @@ It is recommended to limit the Nextflow Java virtual machines memory. We recomme
 NXF_OPTS='-Xms1g -Xmx4g'
 ```
 
-<!-- TODO nf-core: Document required command line parameters to run the pipeline-->
 
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:
 
 ```bash
-nextflow run nf-core/scoop --reads '*_R{1,2}.fastq.gz' -profile docker
+nextflow run nf-core/scoop --input reads.tsv --tool humann2 -profile docker
 ```
 
 This will launch the pipeline with the `docker` configuration profile. See below for more information about profiles.
@@ -70,19 +69,21 @@ results         # Finished results (configurable, see below)
 # Other nextflow hidden files, eg. history of pipeline runs and old logs.
 ```
 
+**NB: at the moment the pipeline cannot run custom metaphlan2 databases**
+
 ### Updating the pipeline
 
 When you run the above command, Nextflow automatically pulls the pipeline code from GitHub and stores it as a cached version. When running the pipeline after this, it will always use the cached version if available - even if the pipeline has been updated since. To make sure that you're running the latest version of the pipeline, make sure that you regularly update the cached version of the pipeline:
 
 ```bash
-nextflow pull nf-core/scoop
+nextflow pull nibscbioinformatics/scoop
 ```
 
 ### Reproducibility
 
 It's a good idea to specify a pipeline version when running the pipeline on your data. This ensures that a specific version of the pipeline code and software are used when you run your pipeline. If you keep using the same tag, you'll be running the same version of the pipeline, even if there have been changes to the code since.
 
-First, go to the [nf-core/scoop releases page](https://github.com/nf-core/scoop/releases) and find the latest version number - numeric only (eg. `1.3.1`). Then specify this when running the pipeline with `-r` (one hyphen) - eg. `-r 1.3.1`.
+First, go to the [nibscbioinformatics/scoop releases page](https://github.com/nibscbioinformatics/scoop/releases) and find the latest version number - numeric only (eg. `1.3.1`). Then specify this when running the pipeline with `-r` (one hyphen) - eg. `-r 1.3.1`.
 
 This version number will be logged in reports when you run the pipeline, so that you'll know what you used when you look back in the future.
 
@@ -105,10 +106,10 @@ If `-profile` is not specified, the pipeline will run locally and expect all sof
 
 * `docker`
   * A generic configuration profile to be used with [Docker](http://docker.com/)
-  * Pulls software from dockerhub: [`nfcore/scoop`](http://hub.docker.com/r/nfcore/scoop/)
+  * Pulls software from dockerhub: [`nfcore/scoop`](https://hub.docker.com/repository/docker/nibscbioinformatics/scoop)
 * `singularity`
   * A generic configuration profile to be used with [Singularity](http://singularity.lbl.gov/)
-  * Pulls software from DockerHub: [`nfcore/scoop`](http://hub.docker.com/r/nfcore/scoop/)
+  * Pulls software from DockerHub: [`nfcore/scoop`](https://hub.docker.com/repository/docker/nibscbioinformatics/scoop)
 * `conda`
   * Please only use Conda as a last resort i.e. when it's not possible to run the pipeline with Docker or Singularity.
   * A generic configuration profile to be used with [Conda](https://conda.io/docs/)
@@ -116,6 +117,13 @@ If `-profile` is not specified, the pipeline will run locally and expect all sof
 * `test`
   * A profile with a complete configuration for automated testing
   * Includes links to test data so needs no other parameters
+
+If you are running from within a NIBSC cluster, a *nibsc* profile is also available
+
+* `nibsc`
+  * uses singularity by default
+  * sets the right mounts to run on NIBSC HPC cluster
+  * uses *slurm* as tasks scheduler 
 
 <!-- TODO nf-core: Document required command line parameters -->
 

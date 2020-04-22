@@ -2,8 +2,8 @@
 
 **Yet another random cookery name for a metagenomics pipeline based on biobakery tools**.
 
-[![GitHub Actions CI Status](https://github.com/nf-core/scoop/workflows/nf-core%20CI/badge.svg)](https://github.com/nf-core/scoop/actions)
-[![GitHub Actions Linting Status](https://github.com/nf-core/scoop/workflows/nf-core%20linting/badge.svg)](https://github.com/nf-core/scoop/actions)
+[![GitHub Actions CI Status](https://github.com/nibsbioinformatics/scoop/workflows/nf-core%20CI/badge.svg)](https://github.com/nibsbioinformatics/scoop/actions)
+[![GitHub Actions Linting Status](https://github.com/nibsbioinformatics/scoop/workflows/nf-core%20linting/badge.svg)](https://github.com/nibsbioinformatics/scoop/actions)
 [![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A519.10.0-brightgreen.svg)](https://www.nextflow.io/)
 
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg)](http://bioconda.github.io/)
@@ -25,14 +25,13 @@ iii. Download the pipeline and test it on a minimal dataset with a single comman
 nextflow run nf-core/scoop -profile test,<docker/singularity/conda/institute>
 ```
 
-> Please check [nf-core/configs](https://github.com/nf-core/configs#documentation) to see if a custom config file to run nf-core pipelines already exists for your Institute. If so, you can simply use `-profile <institute>` in your command. This will enable either `docker` or `singularity` and set the appropriate execution settings for your local compute environment.
+> Please check [nf-core/configs](https://github.com/nibsbioinformatics/configs#documentation) to see if a custom config file to run nf-core pipelines already exists for your Institute. If so, you can simply use `-profile <institute>` in your command. This will enable either `docker` or `singularity` and set the appropriate execution settings for your local compute environment.
 
 iv. Start running your own analysis!
 
-<!-- TODO nf-core: Update the default command above used to run the pipeline -->
 
 ```bash
-nextflow run nf-core/scoop -profile <docker/singularity/conda/institute> --reads '*_R{1,2}.fastq.gz' --genome GRCh37
+nextflow run nf-core/scoop -profile <docker/singularity/conda/institute> --input samples.tsv --tool metaphlan2
 ```
 
 See [usage docs](docs/usage.md) for all of the available options when running the pipeline.
@@ -50,7 +49,7 @@ The nf-core/scoop pipeline comes with documentation about the pipeline, found in
 4. [Output and how to interpret the results](docs/output.md)
 5. [Troubleshooting](https://nf-co.re/usage/troubleshooting)
 
-<!-- TODO nf-core: Add a brief overview of what the pipeline does and how it works -->
+The pipeline runs either Metaphlan2 for taxonomic classification, or the whole Humann2 pipeline for taxonomic and functional genomics analysis of shotgun sequencing reads.
 
 ## Credits
 

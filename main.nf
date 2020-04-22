@@ -1,13 +1,69 @@
 #!/usr/bin/env nextflow
 /*
 ========================================================================================
-                         nf-core/scoop
+                         nibscbioinformatics/scoop
 ========================================================================================
- nf-core/scoop Analysis Pipeline.
+ nibscbioinformatics/scoop Analysis Pipeline.
  #### Homepage / Documentation
- https://github.com/nf-core/scoop
+ https://github.com/nibscbioinformatics/scoop
 ----------------------------------------------------------------------------------------
 */
+
+
+/*
+=============================================================================
+### SET PARAMETERS OTHERWISE UNDEFINED with default false value
+============================================================================
+*/
+
+/* ##############################################
+*  INITIALISE DATABASE FILES
+*  ##############################################
+*/
+
+// Check if database exists in the config file
+if (params.tool && !params.databases.containsKey(params.tool)) {
+    exit 1, "The requested tool '${params.tool}' is not available and no database is associated with it. Currently the available databases are ${params.databases.keySet().join(", ")}"
+}
+
+// if params.nucleotide_db is empty, it will default to chocophlan
+// if not empty, but is not chocophlan we assume it's a URL or local file
+params.nucleotide_db = 'chocophlan'
+//params.nucleotide_db = params.nucleotide_db ? params.nucleotide_db : 'chocophlan'
+
+// if params.protein_db is empty, it will default to uniref90
+params.protein_db = 'uniref90_diamond'
+//params.protein_db = params.protein_db ? params.protein_db : 'uniref90_diamond'
+params.metaphlan_db = 'bowtie'
+//params.metaphlan_db = params.metaphlan_db ? params.metaphlan_db : 'bowtie'
+
+params.mpa_index = 'v20_m200'
+//params.mpa_index = params.mpa_index ? params.mpa_index : 'v20_m200'
+
+
+// no ifs based on selected tool, if database for that tool doesn't exist will set param as null
+params.chocophlan = params.tool ? params.databases[params.tool].chocophlan ?: null : null
+params.uniref50_diamond = params.tool ? params.databases[params.tool].uniref50_diamond ?: null : null
+params.uniref90_diamond = params.tool ? params.databases[params.tool].uniref90_diamond ?: null : null
+params.uniref50_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref50_ec_filtered_diamond ?: null : null
+params.uniref90_ec_filtered_diamond = params.tool ? params.databases[params.tool].uniref90_ec_filtered_diamond ?: null : null
+
+// metaphlan default db needs to be downloaded and prepared anyway
+params.bowtie = params.databases['metaphlan2'].bowtie
+params.mpamdd5 = params.databases['metaphlan2'].md5
+
+
+// search mode will vary according to the selected database
+params.search_mode = 'uniref90'
+//params.search_mode = params.search_mode ? params.search_mode : 'uniref50'
+
+// metaphlan db is packed in a quite peculiar way so we need to distinguish when it's custom
+// or when it's default
+params.mpaType = 'default'
+//params.mpaType = params.mpaType ? params.mpaType : 'default'
+
+
+// =======================================================================
 
 def helpMessage() {
     // TODO nf-core: Add to this help message with new command line parameters
@@ -18,19 +74,38 @@ def helpMessage() {
 
     The typical command for running the pipeline is as follows:
 
-    nextflow run nf-core/scoop --reads '*_R{1,2}.fastq.gz' -profile docker
+    nextflow run nibscbioinformatics/scoop --input 'sample_file.tsv' -profile docker
 
     Mandatory arguments:
-      --reads [file]                Path to input data (must be surrounded with quotes)
-      -profile [str]                Configuration profile to use. Can use multiple (comma separated)
-                                    Available: conda, docker, singularity, test, awsbatch, <institute> and more
+      --input [file]                  Input data TSV file
 
-    Options:
-      --genome [str]                  Name of iGenomes reference
-      --single_end [bool]             Specifies that the input is single-end reads
+      -profile [str]                  Configuration profile to use. Can use multiple (comma separated)
+                                      Available: conda, docker, singularity, test, awsbatch, <institute> and more
 
-    References                        If not specified in the configuration file or you wish to overwrite any of the references
-      --fasta [file]                  Path to fasta reference
+      --tool [str]                    Pipeline to use. Can be:
+                                      humann2 - for the entire functional characterisation pipeline
+                                      metaphlan2 - to run just the phylogenetic analysis
+
+      Optional arguments:
+
+      --protein_db [str]              Protein database to be used for Diamond if humann2 workflow has been selected.
+                                      Available:
+                                      uniref50_diamond, uniref90_diamond (default),
+                                      uniref50_ec_filtered_diamond, uniref90_ec_filtered_diamond.
+                                      If custom, a folder location or the URL of a TAR file should be provided.
+
+      --nucleotide_db [str]           Nucleotide database to be used if humann2 workflow has been selected.
+                                      Default: chocophlan.
+                                      If custom, a folder location or the URL of a TAR file should be provided.
+
+      --metaphlan_db [str]            Bowtie DB to be used for metaphlan2.
+                                      If empty, uses default mpa_v20_m200 database.
+                                      If custom, a folder location with properly bowtie indexed db should be provided or URL with a TAR file should be provided.
+                                      The file name prefix should always be in the format mpa_index where index is specified with following option.
+
+      --mpa_index [str]               If custom metaphlan2 database is provided, the second part of the prefix in the file name needs to be specificed, otherwise
+                                      the software will assume it is v20_m200.
+                                      Do not include any preceding underscore which will be added by default between the mandatory mpa previx and the index.
 
     Other options:
       --outdir [file]                 The output directory where the results will be saved
@@ -56,21 +131,6 @@ if (params.help) {
  * SET UP CONFIGURATION VARIABLES
  */
 
-// Check if genome exists in the config file
-if (params.genomes && params.genome && !params.genomes.containsKey(params.genome)) {
-    exit 1, "The provided genome '${params.genome}' is not available in the iGenomes file. Currently the available genomes are ${params.genomes.keySet().join(", ")}"
-}
-
-// TODO nf-core: Add any reference files that are needed
-// Configurable reference genomes
-//
-// NOTE - THIS IS NOT USED IN THIS PIPELINE, EXAMPLE ONLY
-// If you want to use the channel below in a process, define the following:
-//   input:
-//   file fasta from ch_fasta
-//
-params.fasta = params.genome ? params.genomes[ params.genome ].fasta ?: false : false
-if (params.fasta) { ch_fasta = file(params.fasta, checkIfExists: true) }
 
 // Has the run name been specified by the user?
 //  this has the bonus effect of catching both -name and --name
@@ -94,29 +154,81 @@ ch_multiqc_config = file("$baseDir/assets/multiqc_config.yaml", checkIfExists: t
 ch_multiqc_custom_config = params.multiqc_config ? Channel.fromPath(params.multiqc_config, checkIfExists: true) : Channel.empty()
 ch_output_docs = file("$baseDir/docs/output.md", checkIfExists: true)
 
-/*
- * Create a channel for input read files
- */
-if (params.readPaths) {
-    if (params.single_end) {
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [ file(row[1][0], checkIfExists: true) ] ] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { ch_read_files_fastqc; ch_read_files_trimming }
-    } else {
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [ file(row[1][0], checkIfExists: true), file(row[1][1], checkIfExists: true) ] ] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { ch_read_files_fastqc; ch_read_files_trimming }
-    }
-} else {
-    Channel
-        .fromFilePairs(params.reads, size: params.single_end ? 1 : 2)
-        .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}\nNB: Path needs to be enclosed in quotes!\nIf this is single-end data, please specify --single_end on the command line." }
-        .into { ch_read_files_fastqc; ch_read_files_trimming }
+
+
+// channels are set based on parameters
+// or as local file or URL if none of the name matches (i.e. using switch default)
+
+ch_nucleotide_db = Channel.empty()
+ch_protein_db = Channel.empty()
+ch_metaphlan_db = Channel.empty()
+
+
+if (params.tool == 'humann2'){
+  switch (params.nucleotide_db) {
+    case 'chocophlan':
+          ch_nucleotide_db = params.chocophlan ? Channel.value(file(params.chocophlan)) : "null";
+          break;
+    default:
+          ch_nucleotide_db = params.nucletide_db ? Channel.value(file(params.nucletide_db)) : "null";
+          break;
+  }
+  switch (params.protein_db) {
+    case 'uniref50_diamond':
+          ch_protein_db = params.uniref50_diamond ? Channel.value(file(params.uniref50_diamond)) : "null";
+          params.search_mode = 'uniref50';
+          break;
+
+    case 'uniref90_diamond':
+          ch_protein_db = params.uniref90_diamond ? Channel.value(file(params.uniref90_diamond)) : "null";
+          break;
+
+    case 'uniref50_ec_filtered_diamond':
+          ch_protein_db = params.uniref50_ec_filtered_diamond ? Channel.value(file(params.uniref50_ec_filtered_diamond)) : "null";
+          break;
+
+    case 'uniref90_ec_filtered_diamond':
+          ch_protein_db = params.uniref90_ec_filtered_diamond ? Channel.value(file(params.uniref90_ec_filtered_diamond)) : "null";
+          break;
+
+    default:
+          ch_protein_db = params.protein_db ? Channel.value(file(params.protein_db)) : "null";
+          break;
+  }
 }
+
+// metaphlan db is always used or custome, but always present
+switch(params.metaphlan_db){
+  case 'bowtie':
+        ch_metaphlan_db = params.bowtie ? Channel.value(file(params.bowtie)) : "null";
+        break;
+  default:
+        ch_metaphlan_db = params.metaphlan_db ? Channel.value(file(params.metaphlan_db)) : "null";
+        params.mpaType = 'custom';
+        break;
+}
+
+
+
+/* ############################################
+ * Create a channel for input read files
+ * ############################################
+ */
+
+inputSample = Channel.empty()
+if (params.input) {
+  tsvFile = file(params.input)
+  inputSample = readInputFile(tsvFile)
+}
+else {
+  log.info "No TSV file"
+  exit 1, 'No sample were defined, see --help'
+}
+
+// split the channel into reading processes
+
+(inputSampleFastqc, inputSampleHumann2, inputSampleMetaphlan2) = inputSample.into(3)
+
 
 // Header log info
 log.info nfcoreHeader()
@@ -124,9 +236,7 @@ def summary = [:]
 if (workflow.revision) summary['Pipeline Release'] = workflow.revision
 summary['Run Name']         = custom_runName ?: workflow.runName
 // TODO nf-core: Report custom parameters here
-summary['Reads']            = params.reads
-summary['Fasta Ref']        = params.fasta
-summary['Data Type']        = params.single_end ? 'Single-End' : 'Paired-End'
+summary['Input']            = params.input
 summary['Max Resources']    = "$params.max_memory memory, $params.max_cpus cpus, $params.max_time time per job"
 if (workflow.containerEngine) summary['Container'] = "$workflow.containerEngine - $workflow.container"
 summary['Output dir']       = params.outdir
@@ -134,6 +244,10 @@ summary['Launch dir']       = workflow.launchDir
 summary['Working dir']      = workflow.workDir
 summary['Script dir']       = workflow.projectDir
 summary['User']             = workflow.userName
+summary['Analysis Type']    = params.tool
+summary['Metaphlan DB type'] = params.mpaType
+summary['Nucleotide DB']    = params.nucleotide_db
+summary['Protein DB']       = params.protein_db
 if (workflow.profile.contains('awsbatch')) {
     summary['AWS Region']   = params.awsregion
     summary['AWS Queue']    = params.awsqueue
@@ -160,8 +274,8 @@ Channel.from(summary.collect{ [it.key, it.value] })
     .map { x -> """
     id: 'nf-core-scoop-summary'
     description: " - this information is collected when the pipeline is started."
-    section_name: 'nf-core/scoop Workflow Summary'
-    section_href: 'https://github.com/nf-core/scoop'
+    section_name: 'nibscbioinformatics/scoop Workflow Summary'
+    section_href: 'https://github.com/nibscbioinformatics/scoop'
     plot_type: 'html'
     data: |
         <dl class=\"dl-horizontal\">
@@ -199,22 +313,23 @@ process get_software_versions {
  * STEP 1 - FastQC
  */
 process fastqc {
-    tag "$name"
+    tag "$idSample"
     label 'process_medium'
-    publishDir "${params.outdir}/fastqc", mode: 'copy',
+    publishDir "${params.outdir}/${idSample}/fastqc", mode: 'copy',
         saveAs: { filename ->
                       filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"
                 }
 
     input:
-    set val(name), file(reads) from ch_read_files_fastqc
+    set idSample, gender, status, file(read1), file(read2) from inputSampleFastqc
 
     output:
     file "*_fastqc.{zip,html}" into ch_fastqc_results
 
     script:
     """
-    fastqc --quiet --threads $task.cpus $reads
+    fastqc --quiet --threads $task.cpus $read1
+    fastqc --quiet --threads $task.cpus $read2
     """
 }
 
@@ -227,7 +342,7 @@ process multiqc {
     input:
     file (multiqc_config) from ch_multiqc_config
     file (mqc_custom_config) from ch_multiqc_custom_config.collect().ifEmpty([])
-    // TODO nf-core: Add in log files from your new processes for MultiQC to find!
+    // Add in log files from your new processes for MultiQC to find!
     file ('fastqc/*') from ch_fastqc_results.collect().ifEmpty([])
     file ('software_versions/*') from ch_software_versions_yaml.collect()
     file workflow_summary from ch_workflow_summary.collectFile(name: "workflow_summary_mqc.yaml")
@@ -241,15 +356,287 @@ process multiqc {
     rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
     rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
     custom_config_file = params.multiqc_config ? "--config $mqc_custom_config" : ''
-    // TODO nf-core: Specify which MultiQC modules to use with -m for a faster run time
+    // OK for now: Specify which MultiQC modules to use with -m for a faster run time
     """
     multiqc -f $rtitle $rfilename $custom_config_file .
     """
 }
 
+ch_nucleotide_db = ch_nucleotide_db.dump(tag:'nucleotide db')
+
+process prepNucleotideDB {
+
+  tag "prepare nucletide db"
+  label "process_small"
+
+  input:
+  file(nucleotide_database) from ch_nucleotide_db
+
+  output:
+  path("nucleotidedb", type: 'dir' ) into ch_nucleotidedb_ready
+
+  when: params.tool == 'humann2'
+
+  script:
+  """
+  mkdir nucleotidedb
+  mv ${nucleotide_database} nucleotidedb/.
+  cd nucleotidedb
+
+  tar -xvzf ${nucleotide_database}
+
+  """
+}
+
+ch_protein_db = ch_protein_db.dump(tag:'protein db')
+
+process prepProteinDB {
+  tag "prepare protein db"
+  label "process_small"
+
+  input:
+  file(protein_database) from ch_protein_db
+
+  output:
+  path("proteindb", type: 'dir' ) into ch_proteindb_ready
+
+  when: params.tool == 'humann2'
+
+  script:
+  """
+  mkdir proteindb
+  mv ${protein_database} proteindb/.
+  cd proteindb
+
+  tar -xvzf ${protein_database}
+  """
+
+
+}
+
+
+process prepMetaphlanDB {
+  tag "prepare metaphlan db"
+  label "process_medium"
+
+  input:
+  file(metaphlan_database) from ch_metaphlan_db
+  file(md5) from Channel.value(file(params.mpamdd5))
+
+  output:
+  path("mpadb", type: 'dir' ) into (ch_metaphlandb_ready_mpaonly, ch_metaphlandb_ready_humann2)
+
+  when: params.mpaType == 'default'
+
+  script:
+  """
+  mkdir mpadb
+  mv ${md5} mpadb/.
+  mv ${metaphlan_database} mpadb/.
+  cd mpadb
+
+  tar -xvf ${metaphlan_database}
+  bzip2 -d mpa_v20_m200.fna.bz2
+  bowtie2-build --threads ${task.cpus} mpa_v20_m200.fna ./mpa_v20_m200
+
+  """
+}
+
+//process prepMetaphlanDBCustom {
+  // ################################
+  // this still needs to be developed
+  // TO-DO
+  // ################################
+//}
+
+
+
+process metaphlanOnly {
+
+  tag "metaphlan2 $idSample"
+
+  label 'process_high'
+  publishDir "${params.outdir}/${idSample}/metaphlan2", mode: 'copy'
+
+  input:
+  set idSample, gender, status, file(read1), file(read2) from inputSampleMetaphlan2
+  path(mpadb) from ch_metaphlandb_ready_mpaonly
+
+  output:
+  file("${idSample}_metaphlan_bugs_list.tsv") into ch_metaphlan_results
+
+  when: params.tool == 'metaphlan2'
+
+  script:
+
+  """
+  cat ${read1} ${read2} >${idSample}_concat.fastq.gz
+
+  metaphlan2.py \
+  --input_type fastq \
+  --tmp_dir=. \
+  --bowtie2out=${idSample}_bt2out.txt \
+  --bowtie2db ${mpadb} \
+  --index ${params.mpa_index} \
+  --nproc ${task.cpus} \
+  ${idSample}_concat.fastq.gz \
+  ${idSample}_metaphlan_bugs_list.tsv\
+  """
+
+}
+
+
+
+process mergeMetaphlanOnly {
+
+  label 'process_small'
+  tag 'metaphlan2 merging'
+
+  publishDir "${params.outdir}/merged_abundance/", mode: 'copy'
+
+  input:
+  file(bugList) from ch_metaphlan_results.collect()
+
+  output:
+  file("merged_abundance_table.tsv")
+
+  when: params.tool == 'metaphlan2'
+
+
+  script:
+  """
+  merge_metaphlan_tables.py \
+  ${bugList} \
+  > merged_abundance_table.tsv
+  """
+
+}
+
+
+
+/*
+* ################################################
+* ## HUMANN2 PROCESSES ###########################
+* ################################################
+*/
+
+
+process characteriseReads {
+
+  tag "humann2 $idSample"
+  cpus 8
+  queue 'WORK'
+  time '360h'
+  memory '32 GB'
+
+  publishDir "${params.outdir}", mode: 'copy'
+
+  when: params.tool == 'humann2'
+
+  input:
+  set idSample, gender, status, file(read1), file(read2) from inputSampleHumann2
+  path(nucleotide_db) from ch_nucleotidedb_ready
+  path(protein_db) from ch_proteindb_ready
+  path(mpadb) from ch_metaphlandb_ready_humann2
+
+  output:
+  file("${idSample}/*genefamilies.tsv") into gene_families_ch
+  file("${idSample}/*pathabundance.tsv") into path_abundance_ch
+  file("${idSample}/*pathcoverage.tsv")
+  file("${idSample}/${idSample}_concat_humann2_temp/${idSample}_concat_metaphlan_bowtie2.txt")
+  file("${idSample}/${idSample}_concat_humann2_temp/${idSample}_concat_metaphlan_bugs_list.tsv")
+
+  script:
+
+  """
+  cat ${read1} ${read2} >${idSample}_concat.fastq.gz
+
+  humann2 \
+  --input ${idSample}_concat.fastq.gz \
+  --nucleotide-database ${nucleotide_db} \
+  --protein-database ${protein_db} \
+  --metaphlan-options \"--bowtie2db ${mpadb} --index ${params.mpa_index}\" \
+  --output ${idSample} \
+  --threads ${task.cpus}
+  """
+}
+
+
+process joinGenes {
+
+  tag "humann2 join genes"
+  label 'process_low'
+
+  publishDir "${params.outdir}", mode: 'copy'
+
+  when: params.tool == 'humann2'
+
+  input:
+  file genetables from gene_families_ch.collect()
+
+  output:
+  file("joined_genefamilies.tsv")
+  file("joined_genefamilies_renorm_cpm.tsv")
+
+  script:
+  """
+  humann2_join_tables \
+  -i ./ \
+  -o joined_genefamilies.tsv \
+  --file_name genefamilies
+
+  humann2_renorm_table \
+  -i joined_genefamilies.tsv \
+  -o joined_genefamilies_renorm_cpm.tsv \
+  --units cpm
+
+  """
+
+}
+
+
+process joinPathways {
+
+  tag "humann2 join pathways"
+  label 'process_low'
+
+  publishDir "${params.outdir}", mode: 'copy'
+
+  when: params.tool == 'humann2'
+
+  input:
+  file pathtables from path_abundance_ch.collect()
+
+  output:
+  file("joined_pathabundance.tsv")
+  file("joined_pathabundance_renorm_cpm.tsv")
+
+  script:
+  """
+  humann2_join_tables \
+  -i ./ \
+  -o joined_pathabundance.tsv \
+  --file_name pathabundance
+
+  humann2_renorm_table \
+  -i joined_pathabundance.tsv \
+  -o joined_pathabundance_renorm_cpm.tsv \
+  --units cpm
+
+  """
+
+}
+
+
+
+
+
+
+
+
 /*
  * STEP 3 - Output Description HTML
- */
+
 process output_documentation {
     publishDir "${params.outdir}/pipeline_info", mode: 'copy'
 
@@ -264,6 +651,7 @@ process output_documentation {
     markdown_to_html.py $output_docs -o results_description.html
     """
 }
+*/
 
 /*
  * Completion e-mail notification
@@ -271,9 +659,9 @@ process output_documentation {
 workflow.onComplete {
 
     // Set up the e-mail variables
-    def subject = "[nf-core/scoop] Successful: $workflow.runName"
+    def subject = "[nibscbioinformatics/scoop] Successful: $workflow.runName"
     if (!workflow.success) {
-        subject = "[nf-core/scoop] FAILED: $workflow.runName"
+        subject = "[nibscbioinformatics/scoop] FAILED: $workflow.runName"
     }
     def email_fields = [:]
     email_fields['version'] = workflow.manifest.version
@@ -298,19 +686,18 @@ workflow.onComplete {
     email_fields['summary']['Nextflow Build'] = workflow.nextflow.build
     email_fields['summary']['Nextflow Compile Timestamp'] = workflow.nextflow.timestamp
 
-    // TODO nf-core: If not using MultiQC, strip out this code (including params.max_multiqc_email_size)
     // On success try attach the multiqc report
     def mqc_report = null
     try {
         if (workflow.success) {
             mqc_report = ch_multiqc_report.getVal()
             if (mqc_report.getClass() == ArrayList) {
-                log.warn "[nf-core/scoop] Found multiple reports from process 'multiqc', will use only one"
+                log.warn "[nibscbioinformatics/scoop] Found multiple reports from process 'multiqc', will use only one"
                 mqc_report = mqc_report[0]
             }
         }
     } catch (all) {
-        log.warn "[nf-core/scoop] Could not attach MultiQC report to summary email"
+        log.warn "[nibscbioinformatics/scoop] Could not attach MultiQC report to summary email"
     }
 
     // Check if we are only sending emails on failure
@@ -342,11 +729,11 @@ workflow.onComplete {
             if (params.plaintext_email) { throw GroovyException('Send plaintext e-mail, not HTML') }
             // Try to send HTML e-mail using sendmail
             [ 'sendmail', '-t' ].execute() << sendmail_html
-            log.info "[nf-core/scoop] Sent summary e-mail to $email_address (sendmail)"
+            log.info "[nibscbioinformatics/scoop] Sent summary e-mail to $email_address (sendmail)"
         } catch (all) {
             // Catch failures and try with plaintext
             [ 'mail', '-s', subject, email_address ].execute() << email_txt
-            log.info "[nf-core/scoop] Sent summary e-mail to $email_address (mail)"
+            log.info "[nibscbioinformatics/scoop] Sent summary e-mail to $email_address (mail)"
         }
     }
 
@@ -372,10 +759,10 @@ workflow.onComplete {
     }
 
     if (workflow.success) {
-        log.info "-${c_purple}[nf-core/scoop]${c_green} Pipeline completed successfully${c_reset}-"
+        log.info "-${c_purple}[nibscbioinformatics/scoop]${c_green} Pipeline completed successfully${c_reset}-"
     } else {
         checkHostname()
-        log.info "-${c_purple}[nf-core/scoop]${c_red} Pipeline completed with errors${c_reset}-"
+        log.info "-${c_purple}[nibscbioinformatics/scoop]${c_red} Pipeline completed with errors${c_reset}-"
     }
 
 }
@@ -399,7 +786,7 @@ def nfcoreHeader() {
     ${c_blue}  |\\ | |__  __ /  ` /  \\ |__) |__         ${c_yellow}}  {${c_reset}
     ${c_blue}  | \\| |       \\__, \\__/ |  \\ |___     ${c_green}\\`-._,-`-,${c_reset}
                                             ${c_green}`._,._,\'${c_reset}
-    ${c_purple}  nf-core/scoop v${workflow.manifest.version}${c_reset}
+    ${c_purple}  nibscbioinformatics/scoop v${workflow.manifest.version}${c_reset}
     -${c_dim}--------------------------------------------------${c_reset}-
     """.stripIndent()
 }
@@ -422,5 +809,60 @@ def checkHostname() {
                 }
             }
         }
+    }
+}
+
+def readInputFile(tsvFile) {
+    Channel.from(tsvFile)
+        .splitCsv(sep: '\t')
+        .map { row ->
+            def idSample  = row[0]
+            def gender     = row[1]
+            def status     = row[2].toInteger()
+            def file1      = returnFile(row[3])
+            def file2      = "null"
+            if (hasExtension(file1, "fastq.gz") || hasExtension(file1, "fq.gz")) {
+                checkNumberOfItem(row, 5)
+                file2 = returnFile(row[4])
+                if (!hasExtension(file2, "fastq.gz") && !hasExtension(file2, "fq.gz")) exit 1, "File: ${file2} has the wrong extension. See --help for more information"
+            }
+            // else if (hasExtension(file1, "bam")) checkNumberOfItem(row, 5)
+            // here we only use this function for fastq inputs and therefore we suppress bam files
+            else "No recognisable extension for input file: ${file1}"
+            [idSample, gender, status, file1, file2]
+        }
+}
+
+// #### SAREK FUNCTIONS #########################
+def checkNumberOfItem(row, number) {
+    if (row.size() != number) exit 1, "Malformed row in TSV file: ${row}, see --help for more information"
+    return true
+}
+
+def hasExtension(it, extension) {
+    it.toString().toLowerCase().endsWith(extension.toLowerCase())
+}
+
+// Return file if it exists
+def returnFile(it) {
+    if (!file(it).exists()) exit 1, "Missing file in TSV file: ${it}, see --help for more information"
+    return file(it)
+}
+
+// Return status [0,1]
+// 0 == Control, 1 == Case
+def returnStatus(it) {
+    if (!(it in [0, 1])) exit 1, "Status is not recognized in TSV file: ${it}, see --help for more information"
+    return it
+}
+
+// ############### OTHER UTILS ##########################
+
+// Example usage: defaultIfInexistent({myVar}, "default")
+def defaultIfInexistent(varNameExpr, defaultValue) {
+    try {
+        varNameExpr()
+    } catch (exc) {
+        defaultValue
     }
 }

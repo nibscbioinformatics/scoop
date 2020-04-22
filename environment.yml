@@ -1,15 +1,16 @@
 # You can use this file to create a conda environment for this pipeline:
 #   conda env create -f environment.yml
-name: nf-core-scoop-1.0dev
+name: nibscbioinformatics-scoop-1.0dev
 channels:
   - conda-forge
   - bioconda
   - defaults
 dependencies:
-  - conda-forge::python=3.7.3
+  - conda-forge::python=2.7.15
   - conda-forge::markdown=3.1.1
   - conda-forge::pymdown-extensions=6.0
   - conda-forge::pygments=2.5.2
-  # TODO nf-core: Add required software dependencies here
   - bioconda::fastqc=0.11.8
   - bioconda::multiqc=1.7
+  - bioconda::humann2=2.8.1
+  - anaconda::wget= 1.20.1
